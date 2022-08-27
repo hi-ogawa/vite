@@ -1,8 +1,10 @@
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import MagicString from 'magic-string'
 import type { ViteDevServer } from '../server'
 import {
   bareImportRE,
+  combineSourcemaps,
   dynamicImport,
   isBuiltin,
   unwrapId,
@@ -13,6 +15,7 @@ import type { InternalResolveOptions } from '../plugins/resolve'
 import { tryNodeResolve } from '../plugins/resolve'
 import { hookNodeResolve } from '../plugins/ssrRequireHook'
 import { NULL_BYTE_PLACEHOLDER } from '../constants'
+import { getCodeWithSourcemap } from '../server/sourcemap'
 import {
   ssrDynamicImportKey,
   ssrExportAllKey,
@@ -186,17 +189,30 @@ async function instantiateModule(
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    const AsyncFunction = async function () {}.constructor as typeof Function
-    const initModule = new AsyncFunction(
-      `global`,
-      ssrModuleExportsKey,
-      ssrImportMetaKey,
-      ssrImportKey,
-      ssrDynamicImportKey,
-      ssrExportAllKey,
-      '"use strict";' + result.code + `\n//# sourceURL=${mod.url}`
+    // use eval to associate the code with source map
+    const s = new MagicString(result.code)
+    s.prepend(
+      `'use strict'; async (global, ${ssrModuleExportsKey}, ${ssrImportMetaKey}, ${ssrImportKey}, ${ssrDynamicImportKey}, ${ssrExportAllKey}) => {\n`
     )
+    s.append(`\n}`)
+    let code = s.toString()
+    if (result.map) {
+      const map = combineSourcemaps(
+        url,
+        [
+          {
+            ...s.generateMap({ hires: true }),
+            sources: result.map.sources,
+            sourcesContent: result.map.sourcesContent
+          },
+          result.map as any
+        ],
+        false
+      ) as any
+      map.sources = [mod.file] // probably dirty hack
+      code = getCodeWithSourcemap('js', code, map)
+    }
+    const initModule = eval(code)
     await initModule(
       context.global,
       ssrModule,
