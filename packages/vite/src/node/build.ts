@@ -997,7 +997,7 @@ const relativeUrlMechanisms: Record<
       `(require('u' + 'rl').URL)`
     )} : ${getRelativeUrlFromDocument(relativePath)})`,
   es: (relativePath) => getResolveUrl(`'${relativePath}', import.meta.url`),
-  iife: (relativePath) => getRelativeUrlFromDocument(relativePath),
+  iife: (relativePath) => getRelativeUrlFromDocument(relativePath, true),
   // NOTE: make sure rollup generate `module` params
   system: (relativePath) => getResolveUrl(`'${relativePath}', module.meta.url`),
   umd: (relativePath) =>
