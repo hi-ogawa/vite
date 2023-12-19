@@ -88,6 +88,11 @@ export async function serve(): Promise<{ close(): Promise<void> }> {
       configFile: path.resolve(__dirname, '../vite.named-exports.config.js'),
     })
 
+    await build({
+      root: rootDir,
+      configFile: path.resolve(__dirname, '../vite.esm-no-export.config.js'),
+    })
+
     // start static file server
     const serve = sirv(path.resolve(rootDir, 'dist'))
     const httpServer = http.createServer((req, res) => {

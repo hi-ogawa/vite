@@ -82,6 +82,11 @@ describe.runIf(isBuild)('build', () => {
     expect(iife).toMatch('process.env.NODE_ENV')
     expect(umd).toMatch('process.env.NODE_ENV')
   })
+
+  test('no export default on esm format with cjs global variable', () => {
+    const es = readFile('dist/esm-no-export/my-lib.js')
+    expect(es.trim()).toBe('console.log(typeof exports);')
+  })
 })
 
 test.runIf(isServe)('dev', async () => {

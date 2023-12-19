@@ -303,6 +303,13 @@ export const buildEsbuildPlugin = (config: ResolvedConfig): Plugin => {
         return null
       }
 
+      if (config.build.lib && options.format === 'esm') {
+        // Inject empty export statement to force esbuild to recognize the input code as ESM.
+        // Otherwise, when the code includes CJS specific global variables (e.g. this, exports) but without ESM export statements,
+        // esbuild will treat it as CJS and end up injecting `export default require_xxx()`.
+        // Note that esbuild will remove this empty export regardless of minify config, so it won't affect the output.
+        code += '\nexport {}'
+      }
       const res = await transformWithEsbuild(code, chunk.fileName, options)
 
       if (config.build.lib) {
