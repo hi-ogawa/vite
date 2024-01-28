@@ -7,7 +7,6 @@ import type {
 import { init, parse as parseImports } from 'es-module-lexer'
 import type { OutputChunk, SourceMap } from 'rollup'
 import type { RawSourceMap } from '@ampproject/remapping'
-import convertSourceMap from 'convert-source-map'
 import {
   combineSourcemaps,
   generateCodeFrame,
@@ -556,10 +555,9 @@ function __vite__mapDeps(indexes) {
 
               if (config.build.sourcemap === 'inline') {
                 chunk.code = chunk.code.replace(
-                  convertSourceMap.mapFileCommentRegex,
-                  '',
+                  lastMapFileCommentRegex,
+                  `//# sourceMappingURL=${genSourceMapUrl(map)}\n`,
                 )
-                chunk.code += `\n//# sourceMappingURL=${genSourceMapUrl(map)}`
               } else if (config.build.sourcemap) {
                 const mapAsset = bundle[chunk.fileName + '.map']
                 if (mapAsset && mapAsset.type === 'asset') {
