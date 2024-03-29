@@ -492,7 +492,7 @@ export function importAnalysisPlugin(config: ResolvedConfig): Plugin {
               return
             }
             // skip ssr external
-            if (ssr && !matchAlias(specifier)) {
+            if (ssr && environment.name === 'ssr' && !matchAlias(specifier)) {
               if (shouldExternalizeForSSR(specifier, importer, config)) {
                 return
               }
