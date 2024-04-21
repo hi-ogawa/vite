@@ -37,6 +37,7 @@ export default defineConfig((env) => ({
         // for example, `ssr: true` seems to make `minify: false` automatically
         // and also externalization.
         ssr: true,
+        emitAssets: true,
         rollupOptions: {
           input: {
             index: '/src/entry-server',

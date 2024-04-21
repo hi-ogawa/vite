@@ -14,6 +14,10 @@ export default function Root() {
       <div>Count: {count}</div>
       <button onClick={() => setCount((v) => v - 1)}>-1</button>
       <button onClick={() => setCount((v) => v + 1)}>+1</button>
+      <div style={{ margin: '1rem' }}>
+        <div id="css-client">css client</div>
+        <div id="css-server">css server</div>
+      </div>
     </div>
   )
 }
