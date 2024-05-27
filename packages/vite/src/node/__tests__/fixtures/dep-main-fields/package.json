@@ -1,0 +1,6 @@
+{
+  "name": "@vitejs/dep-module-field",
+  "private": true,
+  "main": "./main.cjs",
+  "module": "./module.mjs"
+}
