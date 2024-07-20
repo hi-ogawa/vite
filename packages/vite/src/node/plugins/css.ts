@@ -2174,7 +2174,9 @@ const makeScssWorker = (
               ? JSON.stringify(result.sourceMap)
               : undefined,
             stats: {
-              includedFiles: result.loadedUrls.map((url) => fileURLToPath(url)),
+              includedFiles: result.loadedUrls
+                .filter((url) => url.protocol === 'file')
+                .map((url) => fileURLToPath(url)),
             },
           } satisfies ScssWorkerResult
         }
@@ -2230,11 +2232,13 @@ const makeScssWorker = (
       shouldUseFake(_sassPath, _data, options) {
         // functions and importer is a function and is not serializable
         // in that case, fallback to running in main thread
-        return !!(
-          (options.functions && Object.keys(options.functions).length > 0) ||
-          (options.importer &&
-            (!Array.isArray(options.importer) || options.importer.length > 0))
-        )
+        return !!((options.functions &&
+          Object.keys(options.functions).length > 0) ||
+          (options.importers &&
+            (!Array.isArray(options.importers) ||
+              options.importers.length > 0)),
+        options.importer &&
+          (!Array.isArray(options.importer) || options.importer.length > 0))
       },
       max: maxWorkers,
     },
