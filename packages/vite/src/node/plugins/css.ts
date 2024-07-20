@@ -2106,6 +2106,14 @@ const makeScssWorker = (
     return resolved ?? null
   }
 
+  const modernInternalLoad = async (file: string, rootFile: string) => {
+    const result = await rebaseUrls(file, rootFile, alias, '$', resolvers.sass)
+    if (result.contents) {
+      return result.contents
+    }
+    return await fs.promises.readFile(result.file, 'utf-8')
+  }
+
   type ScssWorkerResult = {
     css: string
     map?: string | undefined
@@ -2134,8 +2142,8 @@ const makeScssWorker = (
           const { fileURLToPath, pathToFileURL }: typeof import('node:url') =
             // eslint-disable-next-line no-restricted-globals
             require('node:url')
-          // eslint-disable-next-line no-restricted-globals
-          const fs: typeof import('node:fs') = require('node:fs')
+
+          // const fs: typeof import('node:fs') = require('node:fs')
 
           const sassOptions = { ...options } as Sass.StringOptions<'async'>
           sassOptions.url = pathToFileURL(options.filename)
@@ -2144,6 +2152,7 @@ const makeScssWorker = (
           // https://github.com/sass/sass/issues/3247
           const sassInternalImporter: Sass.Importer<'async'> = {
             async canonicalize(url, context) {
+              // console.log("[canonicalize]", url, context.containingUrl?.href);
               const importer = context.containingUrl
                 ? fileURLToPath(context.containingUrl)
                 : options.filename
@@ -2160,7 +2169,10 @@ const makeScssWorker = (
               } else if (ext && ext.toLowerCase() === '.css') {
                 syntax = 'css'
               }
-              const contents = await fs.promises.readFile(canonicalUrl, 'utf-8')
+              const contents = await modernInternalLoad(
+                fileURLToPath(canonicalUrl),
+                options.filename,
+              )
               return { contents, syntax }
             },
           }
@@ -2228,17 +2240,22 @@ const makeScssWorker = (
         })
       },
     {
-      parentFunctions: { internalImporter, modernInternalImporter },
+      parentFunctions: {
+        internalImporter,
+        modernInternalImporter,
+        modernInternalLoad,
+      },
       shouldUseFake(_sassPath, _data, options) {
         // functions and importer is a function and is not serializable
         // in that case, fallback to running in main thread
-        return !!((options.functions &&
-          Object.keys(options.functions).length > 0) ||
+        return !!(
+          (options.functions && Object.keys(options.functions).length > 0) ||
           (options.importers &&
             (!Array.isArray(options.importers) ||
-              options.importers.length > 0)),
-        options.importer &&
-          (!Array.isArray(options.importer) || options.importer.length > 0))
+              options.importers.length > 0)) ||
+          (options.importer &&
+            (!Array.isArray(options.importer) || options.importer.length > 0))
+        )
       },
       max: maxWorkers,
     },
@@ -2318,7 +2335,7 @@ async function rebaseUrls(
   alias: Alias[],
   variablePrefix: string,
   resolver: ResolveFn,
-): Promise<Sass.LegacyImporterResult> {
+): Promise<{ file: string; contents?: string }> {
   file = path.resolve(file) // ensure os-specific flashes
   // in the same dir, no need to rebase
   const fileDir = path.dirname(file)
