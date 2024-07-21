@@ -2174,7 +2174,6 @@ const makeScssWorker = (
           sassOptions.importers.push(sassInternalImporter)
 
           const result = await sass.compileStringAsync(data, sassOptions)
-          console.log("[compileStringAsync]", options.filename, result.loadedUrls.map(url => url.href));
           return {
             css: result.css,
             map: result.sourceMap
@@ -2182,7 +2181,7 @@ const makeScssWorker = (
               : undefined,
             stats: {
               includedFiles: result.loadedUrls
-                .filter((url) => url.protocol === 'file')
+                .filter((url) => url.protocol === 'file:')
                 .map((url) => fileURLToPath(url)),
             },
           } satisfies ScssWorkerResult
@@ -2225,6 +2224,7 @@ const makeScssWorker = (
             if (err) {
               reject(err)
             } else {
+              console.log("[includedFiles]", options.filename, [...res!.stats.includedFiles]);
               resolve({
                 css: res!.css.toString(),
                 map: res!.map?.toString(),
