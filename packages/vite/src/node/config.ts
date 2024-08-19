@@ -4,7 +4,8 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { performance } from 'node:perf_hooks'
-import { createRequire } from 'node:module'
+import type { LoadHook, ResolveHook } from 'node:module'
+import { createRequire, register } from 'node:module'
 import colors from 'picocolors'
 import type { Alias, AliasOptions } from 'dep-types/alias'
 import aliasPlugin from '@rollup/plugin-alias'
@@ -1224,6 +1225,42 @@ interface NodeModuleWithCompile extends NodeModule {
   _compile(code: string, filename: string): any
 }
 
+let registered = false
+
+function registerViteConfigLoader() {
+  if (registered) return
+
+  const resolve: ResolveHook = (specifier, context, nextResolve) => {
+    if (specifier.includes('__vite_config_bundle__')) {
+      return {
+        url: specifier,
+        shortCircuit: true,
+      }
+    }
+    return nextResolve(specifier, context)
+  }
+
+  const load: LoadHook = (url, context, nextLoad) => {
+    if (url.includes('__vite_config_bundle__')) {
+      return {
+        format: 'module',
+        source: Buffer.from(
+          url.split('__vite_config_bundle__').at(-1)!,
+          'base64',
+        ),
+        shortCircuit: true,
+      }
+    }
+    return nextLoad(url, context)
+  }
+
+  const code = `export const resolve = ${resolve.toString()};export const load = ${load.toString()}`
+  register(
+    `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`,
+  )
+  registered = true
+}
+
 const _require = createRequire(import.meta.url)
 async function loadConfigFromBundledFile(
   fileName: string,
@@ -1234,6 +1271,12 @@ async function loadConfigFromBundledFile(
   // with --experimental-loader themselves, we have to do a hack here:
   // write it to disk, load it with native Node ESM, then delete the file.
   if (isESM) {
+    if (1) {
+      registerViteConfigLoader()
+      const virtualFileName = `${fileName}.${Date.now()}_${Math.random().toString(16).slice(2)}__vite_config_bundle__${Buffer.from(bundledCode).toString('base64')}`
+      return (await import(pathToFileURL(virtualFileName).href)).default
+    }
+
     const fileBase = `${fileName}.timestamp-${Date.now()}-${Math.random()
       .toString(16)
       .slice(2)}`
