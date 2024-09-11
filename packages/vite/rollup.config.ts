@@ -113,6 +113,7 @@ const nodeConfig = defineConfig({
     'yaml',
     'jiti',
     /^tsx(\/|$)/,
+    'rolldown/experimental',
     ...Object.keys(pkg.dependencies),
   ],
   plugins: [
