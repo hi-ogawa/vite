@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "repl": "node --import ./repl.js",
     "build": "vite build",
     "debug": "node --inspect-brk ../../packages/vite/bin/vite",
     "preview": "vite preview"
