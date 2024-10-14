@@ -1120,30 +1120,40 @@ function resolveExportsOrImports(
   options: InternalResolveOptionsWithOverrideConditions,
   type: 'imports' | 'exports',
 ) {
-  const additionalConditions = new Set(
-    options.overrideConditions || [
-      'production',
-      'development',
-      'module',
-      ...options.conditions,
-    ],
-  )
+  const set = new Set(options.conditions)
+  if (set.has('...')) {
+    set.delete('...')
+    set.add('module')
+    set.add(options.isProduction ? 'production' : 'development')
+    set.add(options.webCompatible && !set.has('node') ? 'browser' : 'node')
+    set.add(options.isRequire && !set.has('import') ? 'require' : 'import')
+  }
 
-  const conditions = [...additionalConditions].filter((condition) => {
-    switch (condition) {
-      case 'production':
-        return options.isProduction
-      case 'development':
-        return !options.isProduction
-    }
-    return true
-  })
+  // const additionalConditions = new Set(
+  //   options.overrideConditions || [
+  //     'production',
+  //     'development',
+  //     'module',
+  //     ...options.conditions,
+  //   ],
+  // )
+
+  // const conditions = [...additionalConditions].filter((condition) => {
+  //   switch (condition) {
+  //     case 'production':
+  //       return options.isProduction
+  //     case 'development':
+  //       return !options.isProduction
+  //   }
+  //   return true
+  // })
 
   const fn = type === 'imports' ? imports : exports
   const result = fn(pkg, key, {
-    browser: options.webCompatible && !additionalConditions.has('node'),
-    require: options.isRequire && !additionalConditions.has('import'),
-    conditions,
+    unsafe: true,
+    // browser: options.webCompatible && !additionalConditions.has('node'),
+    // require: options.isRequire && !additionalConditions.has('import'),
+    conditions: [...set],
   })
 
   return result ? result[0] : undefined
