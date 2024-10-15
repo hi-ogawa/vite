@@ -115,6 +115,16 @@ export function createIsConfiguredAsExternal(
     ) {
       return true
     }
+
+    if (
+      !environment.config.dev.optimizeDeps.noDiscovery &&
+      !environment.config.dev.optimizeDeps.exclude?.includes(id)
+    ) {
+      // If there is server side pre-bundling and the module is not
+      // in the `exclude` config then it is not external
+      return false
+    }
+
     const pkgName = getNpmPackageName(id)
     if (!pkgName) {
       return isExternalizable(id, importer)
