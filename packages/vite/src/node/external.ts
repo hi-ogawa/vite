@@ -116,15 +116,6 @@ export function createIsConfiguredAsExternal(
       return true
     }
 
-    if (
-      !environment.config.dev.optimizeDeps.noDiscovery &&
-      !environment.config.dev.optimizeDeps.exclude?.includes(id)
-    ) {
-      // If there is server side pre-bundling and the module is not
-      // in the `exclude` config then it is not external
-      return false
-    }
-
     const pkgName = getNpmPackageName(id)
     if (!pkgName) {
       return isExternalizable(id, importer)
@@ -143,6 +134,16 @@ export function createIsConfiguredAsExternal(
     if (noExternalFilter && !noExternalFilter(pkgName)) {
       return false
     }
+
+    if (
+      !environment.config.dev.optimizeDeps.noDiscovery &&
+      !environment.config.dev.optimizeDeps.exclude?.includes(id)
+    ) {
+      // If there is server side pre-bundling and the module is not
+      // in the `exclude` config then it is not external
+      return false
+    }
+
     // If external is true, all will be externalized by default, regardless if
     // it's a linked package
     return isExternalizable(id, importer, external === true)
