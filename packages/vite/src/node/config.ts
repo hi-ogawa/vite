@@ -792,11 +792,7 @@ function resolveDepOptimizationOptions(
     exclude: optimizeDeps.exclude ?? [],
     needsInterop: optimizeDeps.needsInterop ?? [],
     extensions: optimizeDeps.extensions ?? [],
-    noDiscovery:
-      optimizeDeps.noDiscovery ??
-      // If the consumer is not the client env (which default discovery entrypoint is `index.html`)
-      // and there are no entries from where to start crawling then disable discovery
-      (consumer !== 'client' && !optimizeDeps.entries?.length),
+    noDiscovery: optimizeDeps.noDiscovery ?? consumer !== 'client',
     holdUntilCrawlEnd: optimizeDeps.holdUntilCrawlEnd ?? true,
     esbuildOptions: {
       preserveSymlinks,
