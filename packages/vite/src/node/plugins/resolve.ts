@@ -912,10 +912,6 @@ export function tryNodeResolve(
     exclude?.includes(pkgId) ||
     exclude?.includes(id) ||
     SPECIAL_QUERY_RE.test(resolved) ||
-    // During dev SSR, we don't have a way to reload the module graph if
-    // a non-optimized dep is found. So we need to skip optimization here.
-    // The only optimized deps are the ones explicitly listed in the config.
-    (!options.ssrOptimizeCheck && !isBuild && ssr) ||
     // Only optimize non-external CJS deps during SSR by default
     (ssr &&
       isFilePathESM(resolved, options.packageCache) &&
