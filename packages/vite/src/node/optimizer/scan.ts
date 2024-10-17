@@ -250,9 +250,16 @@ async function computeEntries(environment: ScanEnvironment) {
   const explicitEntryPatterns = environment.config.dev.optimizeDeps.entries
   const buildInput = environment.config.build.rollupOptions?.input
 
+  // In order not to introduce a potential breaking change we ignore the
+  // rollupOptions?.input field in ssr environments in dev mode
+  const handleBuildInput = !(
+    environment.config.consumer === 'server' &&
+    environment.config.command === 'serve'
+  )
+
   if (explicitEntryPatterns) {
     entries = await globEntries(explicitEntryPatterns, environment)
-  } else if (buildInput) {
+  } else if (handleBuildInput && buildInput) {
     const resolvePath = (p: string) => path.resolve(environment.config.root, p)
     if (typeof buildInput === 'string') {
       entries = [resolvePath(buildInput)]
