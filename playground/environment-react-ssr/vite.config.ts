@@ -33,7 +33,6 @@ export default defineConfig((env) => ({
       dev: {
         optimizeDeps: {
           noDiscovery: false,
-          entries: ['./src/entry-server.tsx'],
         },
       },
       build: {
