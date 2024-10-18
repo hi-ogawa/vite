@@ -18,8 +18,8 @@ test('basic', async () => {
   await page.getByText('Count: 1').isVisible()
 })
 
-describe('pre-bundling', () => {
-  test.runIf(!isBuild)('client - metadata', async () => {
+describe.runIf(!isBuild)('pre-bundling', () => {
+  test('client', async () => {
     const meta = await readFile('node_modules/.vite/deps/_metadata.json')
     const metaJson: DepOptimizationMetadata = JSON.parse(meta)
 
@@ -30,7 +30,7 @@ describe('pre-bundling', () => {
     expect(metaJson.optimized['react-dom/server']).toBeFalsy()
   })
 
-  test.runIf(!isBuild)('ssr - metadata', async () => {
+  test('ssr', async () => {
     const meta = await readFile('node_modules/.vite/deps_ssr/_metadata.json')
     const metaJson: DepOptimizationMetadata = JSON.parse(meta)
 
@@ -41,7 +41,7 @@ describe('pre-bundling', () => {
     expect(metaJson.optimized['react-dom/client']).toBeFalsy()
   })
 
-  test.runIf(!isBuild)('deps reload', async () => {
+  test('deps reload', async () => {
     const envs = ['client', 'server'] as const
 
     const getMeta = (env: (typeof envs)[number]): DepOptimizationMetadata => {
