@@ -1,8 +1,25 @@
 import ReactDomServer from 'react-dom/server'
 import type { Connect, ViteDevServer } from 'vite'
+import testDep from '@vitejs/test-dep'
 import Root from './root'
 
 const handler: Connect.NextHandleFunction = async (_req, res) => {
+  const url = new URL(_req.url!, 'http://localhost')
+  if (url.pathname === '/late-discovery') {
+    // simulate late discovery by importing new modules from virtual.
+    // this can cuase double modules on first request handling and
+    // response would look like
+    //   {"entry":{"id":"heyzuawcitr"},"late":{"id":"autz5sutu1k"}}
+    // @ts-expect-error no dts
+    const mod = await import('virtual:late-discovery')
+    res.setHeader('content-type', 'application/json').end(
+      JSON.stringify({
+        entry: testDep,
+        late: mod.default,
+      }),
+    )
+    return
+  }
   const ssrHtml = ReactDomServer.renderToString(<Root />)
   let html = await importHtml()
   html = html.replace(/<body>/, `<body><div id="root">${ssrHtml}</div>`)

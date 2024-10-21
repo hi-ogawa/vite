@@ -692,6 +692,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.3.0
         version: 18.3.0
+      '@vitejs/test-dep':
+        specifier: file:./deps/test-dep
+        version: file:playground/environment-react-ssr/deps/test-dep
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -704,6 +707,8 @@ importers:
       react-fake-server:
         specifier: npm:react@^18.3.1
         version: react@18.3.1
+
+  playground/environment-react-ssr/deps/test-dep: {}
 
   playground/extensions:
     dependencies:
@@ -3694,6 +3699,9 @@ packages:
     peerDependenciesMeta:
       foobar:
         optional: true
+
+  '@vitejs/test-dep@file:playground/environment-react-ssr/deps/test-dep':
+    resolution: {directory: playground/environment-react-ssr/deps/test-dep, type: directory}
 
   '@vitejs/test-entries@file:playground/ssr-resolve/entries':
     resolution: {directory: playground/ssr-resolve/entries, type: directory}
@@ -9292,6 +9300,8 @@ snapshots:
   '@vitejs/test-dep-with-optional-peer-dep-submodule@file:playground/optimize-deps/dep-with-optional-peer-dep-submodule': {}
 
   '@vitejs/test-dep-with-optional-peer-dep@file:playground/optimize-deps/dep-with-optional-peer-dep': {}
+
+  '@vitejs/test-dep@file:playground/environment-react-ssr/deps/test-dep': {}
 
   '@vitejs/test-entries@file:playground/ssr-resolve/entries': {}
 

@@ -20,9 +20,27 @@ export default defineConfig((env) => ({
         Object.assign(globalThis, { __globalServer: server })
       },
     },
+    {
+      name: 'virtual-late-discovery',
+      resolveId(source) {
+        if (source === 'virtual:late-discovery') {
+          return '\0' + source
+        }
+      },
+      load(id) {
+        if (id === '\0virtual:late-discovery') {
+          return `export { default } from "@vitejs/test-dep/other"`
+        }
+      },
+    },
   ],
   environments: {
     client: {
+      dev: {
+        optimizeDeps: {
+          include: ['react/jsx-dev-runtime'],
+        },
+      },
       build: {
         minify: false,
         sourcemap: true,
@@ -33,6 +51,7 @@ export default defineConfig((env) => ({
       dev: {
         optimizeDeps: {
           noDiscovery: false,
+          include: ['react/jsx-dev-runtime'],
         },
       },
       build: {

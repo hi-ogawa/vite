@@ -1,0 +1,9 @@
+{
+  "name": "@vitejs/test-dep",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./other": "./other.mjs"
+  }
+}
