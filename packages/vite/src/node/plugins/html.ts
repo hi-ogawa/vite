@@ -489,19 +489,21 @@ export function buildHtmlPlugin(config: ResolvedConfig): RolldownPlugin {
                 if (isModule) {
                   inlineModuleIndex++
                   if (url && !isExcludedUrl(url) && !isPublicFile) {
-                    setModuleSideEffectPromises.push(
-                      this.resolve(url, id)
-                        .then((resolved) => {
-                          if (!resolved) {
-                            return Promise.reject()
-                          }
-                          return this.load(resolved)
-                        })
-                        .then((mod) => {
-                          // set this to keep the module even if `treeshake.moduleSideEffects=false` is set
-                          mod.moduleSideEffects = true
-                        }),
-                    )
+                    // FIXME: rolldown does not support `this.load`: https://github.com/rolldown/rolldown/issues/2355
+                    // setModuleSideEffectPromises.push(
+                    //   this.resolve(url, id)
+                    //     .then((resolved) => {
+                    //       if (!resolved) {
+                    //         return Promise.reject()
+                    //       }
+                    //       return this.load(resolved)
+                    //     })
+                    //     .then((mod) => {
+                    //       // set this to keep the module even if `treeshake.moduleSideEffects=false` is set
+                    //       mod.moduleSideEffects = true
+                    //     }),
+                    // )
+
                     // <script type="module" src="..."/>
                     // add it as an import
                     js += `\nimport ${JSON.stringify(url)}`
