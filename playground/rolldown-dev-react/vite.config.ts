@@ -3,7 +3,6 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   clearScreen: false,
   experimental: {
-    rolldownDev: true,
-    rolldownDevReactRefresh: true,
+    rolldownDev: { hmr: true, reactRefresh: true },
   },
 })

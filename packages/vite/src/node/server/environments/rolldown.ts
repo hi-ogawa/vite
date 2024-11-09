@@ -21,7 +21,8 @@ import type {
 
 const require = createRequire(import.meta.url)
 
-interface ViterollOptions {
+export interface RolldownDevOptions {
+  hmr?: boolean
   reactRefresh?: boolean
 }
 
@@ -45,7 +46,8 @@ export function rolldownDevPluginConfig(config: UserConfig): UserConfig {
       client: {
         dev: {
           createEnvironment: RolldownEnvironment.createFactory({
-            reactRefresh: config.experimental?.rolldownDevReactRefresh,
+            hmr: config.experimental?.rolldownDev?.hmr,
+            reactRefresh: config.experimental?.rolldownDev?.reactRefresh,
           }),
         },
         // NOTE
@@ -62,6 +64,7 @@ export function rolldownDevPluginConfig(config: UserConfig): UserConfig {
       ssr: {
         dev: {
           createEnvironment: RolldownEnvironment.createFactory({
+            hmr: false,
             reactRefresh: false,
           }),
         },
@@ -130,14 +133,14 @@ export class RolldownEnvironment extends DevEnvironment {
   buildTimestamp = Date.now()
 
   static createFactory(
-    viterollOptions: ViterollOptions,
+    rolldownDevOptioins: RolldownDevOptions,
   ): NonNullable<DevEnvironmentOptions['createEnvironment']> {
     return (name, config) =>
-      new RolldownEnvironment(viterollOptions, name, config)
+      new RolldownEnvironment(rolldownDevOptioins, name, config)
   }
 
   constructor(
-    public viterollOptions: ViterollOptions,
+    public rolldownDevOptions: RolldownDevOptions,
     name: ConstructorParameters<typeof DevEnvironment>[0],
     config: ConstructorParameters<typeof DevEnvironment>[1],
   ) {
@@ -172,8 +175,7 @@ export class RolldownEnvironment extends DevEnvironment {
 
     console.time(`[rolldown:${this.name}:build]`)
     const inputOptions: rolldown.InputOptions = {
-      // TODO: no dev ssr for now
-      dev: this.name === 'client',
+      dev: this.rolldownDevOptions.hmr,
       input: this.config.build.rollupOptions.input,
       cwd: this.config.root,
       platform: this.name === 'client' ? 'browser' : 'node',
@@ -184,15 +186,12 @@ export class RolldownEnvironment extends DevEnvironment {
       },
       define: this.config.define,
       plugins: [
-        viterollEntryPlugin(this.config, this.viterollOptions),
+        viterollEntryPlugin(this.config, this.rolldownDevOptions),
         // TODO: how to use jsx-dev-runtime?
         rolldownExperimental.transformPlugin({
-          reactRefresh:
-            this.name === 'client' && this.viterollOptions?.reactRefresh,
+          reactRefresh: this.rolldownDevOptions?.reactRefresh,
         }),
-        this.name === 'client' && this.viterollOptions?.reactRefresh
-          ? reactRefreshPlugin()
-          : [],
+        this.rolldownDevOptions?.reactRefresh ? reactRefreshPlugin() : [],
         rolldownExperimental.aliasPlugin({
           entries: this.config.resolve.alias,
         }),
@@ -203,7 +202,7 @@ export class RolldownEnvironment extends DevEnvironment {
     // `generate` should work but we use `write` so it's easier to see output and debug
     const outputOptions: rolldown.OutputOptions = {
       dir: this.outDir,
-      format: this.name === 'client' ? 'app' : 'es',
+      format: this.rolldownDevOptions.hmr ? 'app' : 'es',
       // TODO: hmr_rebuild returns source map file when `sourcemap: true`
       sourcemap: 'inline',
     }
@@ -221,14 +220,14 @@ export class RolldownEnvironment extends DevEnvironment {
     if (!output.moduleIds.includes(ctx.file)) {
       return
     }
-    if (this.name === 'ssr') {
-      await this.build()
-    } else {
+    if (this.rolldownDevOptions.hmr) {
       logger.info(`hmr '${ctx.file}'`, { timestamp: true })
       console.time(`[rolldown:${this.name}:hmr]`)
       const result = await this.instance.experimental_hmr_rebuild([ctx.file])
       console.timeEnd(`[rolldown:${this.name}:hmr]`)
       ctx.server.ws.send('rolldown:hmr', result)
+    } else {
+      await this.build()
     }
   }
 
@@ -243,7 +242,7 @@ export class RolldownEnvironment extends DevEnvironment {
 // TODO: use vite:build-html plugin
 function viterollEntryPlugin(
   config: ResolvedConfig,
-  viterollOptions: ViterollOptions,
+  rolldownDevOptions: RolldownDevOptions,
 ): rolldown.Plugin {
   const htmlEntryMap = new Map<string, MagicString>()
 
@@ -261,7 +260,7 @@ function viterollEntryPlugin(
         htmlEntryMap.set(id, htmlOutput)
 
         let jsOutput = ``
-        if (viterollOptions?.reactRefresh) {
+        if (rolldownDevOptions?.reactRefresh) {
           jsOutput += `import "virtual:react-refresh/entry";\n`
         }
 
@@ -309,7 +308,7 @@ function viterollEntryPlugin(
         return { code: output.toString(), map: output.generateMap() }
       }
     },
-    generateBundle(_options, bundle) {
+    generateBundle(options, bundle) {
       for (const key in bundle) {
         const chunk = bundle[key]
         // emit final html
@@ -320,7 +319,7 @@ function viterollEntryPlugin(
             // inject js entry
             htmlOutput.appendLeft(
               htmlOutput.original.indexOf(`</body>`),
-              `<script src="/${chunk.fileName}"></script>`,
+              `<script ${options.format === 'es' ? 'type="module"' : ''} src="/${chunk.fileName}"></script>`,
             )
 
             // inject client

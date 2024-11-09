@@ -91,7 +91,10 @@ import { resolveSSROptions } from './ssr'
 import { PartialEnvironment } from './baseEnvironment'
 import { createIdResolver } from './idResolver'
 import { type OxcOptions, convertEsbuildConfigToOxcConfig } from './plugins/oxc'
-import { rolldownDevPluginConfig } from './server/environments/rolldown'
+import {
+  type RolldownDevOptions,
+  rolldownDevPluginConfig,
+} from './server/environments/rolldown'
 
 const debug = createDebugger('vite:config', { depth: 10 })
 const promisifiedRealpath = promisify(fs.realpath)
@@ -512,8 +515,7 @@ export interface ExperimentalOptions {
    */
   enableNativePlugin?: boolean
 
-  rolldownDev?: boolean
-  rolldownDevReactRefresh?: boolean
+  rolldownDev?: RolldownDevOptions
 }
 
 export interface LegacyOptions {
