@@ -191,7 +191,7 @@ export class RolldownEnvironment extends DevEnvironment {
         rolldownExperimental.transformPlugin({
           reactRefresh: this.rolldownDevOptions?.reactRefresh,
         }),
-        this.rolldownDevOptions?.reactRefresh ? reactRefreshPlugin() : [],
+        reactRefreshPlugin(this.rolldownDevOptions),
         rolldownExperimental.aliasPlugin({
           entries: this.config.resolve.alias,
         }),
@@ -228,6 +228,9 @@ export class RolldownEnvironment extends DevEnvironment {
       ctx.server.ws.send('rolldown:hmr', result)
     } else {
       await this.build()
+      if (this.name === 'client') {
+        ctx.server.ws.send({ type: 'full-reload' })
+      }
     }
   }
 
@@ -352,7 +355,9 @@ function viterollEntryPlugin(
 }
 
 // TODO: workaround rolldownExperimental.reactPlugin which injects js to html via `load` hook
-function reactRefreshPlugin(): rolldown.Plugin {
+function reactRefreshPlugin(
+  rolldownDevOptions: RolldownDevOptions,
+): rolldown.Plugin {
   return {
     name: 'react-hmr',
     transform: {
@@ -390,6 +395,9 @@ function reactRefreshPlugin(): rolldown.Plugin {
       async handler(id) {
         const resolved = require.resolve('react-refresh/runtime')
         if (id === '\0virtual:react-refresh/entry') {
+          if (!rolldownDevOptions.reactRefresh) {
+            return `export {}`
+          }
           return `
 						import runtime from ${JSON.stringify(resolved)};
 						runtime.injectIntoGlobalHook(window);
