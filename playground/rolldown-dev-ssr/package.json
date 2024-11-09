@@ -1,5 +1,5 @@
 {
-  "name": "@vitejs/test-rolldown-dev-react",
+  "name": "@vitejs/test-rolldown-dev-ssr",
   "private": true,
   "type": "module",
   "scripts": {

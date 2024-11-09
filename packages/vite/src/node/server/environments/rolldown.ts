@@ -35,6 +35,7 @@ export function rolldownDevPluginConfig(config: UserConfig): UserConfig {
     appType: 'custom',
     optimizeDeps: {
       noDiscovery: true,
+      include: [],
     },
     define: {
       // TODO: use vite:define plugin
