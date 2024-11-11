@@ -6,7 +6,6 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import MagicString from 'magic-string'
 import * as rolldown from 'rolldown'
-import * as rolldownExperimental from 'rolldown/experimental'
 import sirv from 'sirv'
 import { createLogger } from '../../publicUtils'
 import { DevEnvironment } from '../environment'
@@ -228,7 +227,7 @@ class RolldownEnvironment extends DevEnvironment {
       (p) =>
         !(typeof p.name === 'number' || p.name?.startsWith('vite:')) ||
         ['vite:define'].includes(p.name) ||
-        ['AliasPlugin'].includes(p.constructor.name),
+        ['AliasPlugin', 'TransformPlugin'].includes(p.constructor.name),
     )
     plugins = plugins.map((p) => injectEnvironmentToHooks(this as any, p))
 
@@ -244,13 +243,9 @@ class RolldownEnvironment extends DevEnvironment {
         symlinks: !this.config.resolve.preserveSymlinks,
       },
       plugins: [
-        viterollEntryPlugin(this.config, this.rolldownDevOptions),
-        // TODO: how to use jsx-dev-runtime?
-        rolldownExperimental.transformPlugin({
-          reactRefresh: this.rolldownDevOptions?.reactRefresh,
-        }),
-        reactRefreshPlugin(this.rolldownDevOptions),
         ...plugins,
+        viterollEntryPlugin(this.config, this.rolldownDevOptions),
+        reactRefreshPlugin(this.rolldownDevOptions),
       ],
     }
     this.instance = await rolldown.rolldown(inputOptions)

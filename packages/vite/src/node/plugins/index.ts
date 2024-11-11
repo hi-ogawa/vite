@@ -57,6 +57,7 @@ export async function resolvePlugins(
       (environment) => !isDepOptimizationDisabled(environment.optimizeDeps),
     )
   const enableNativePlugin = config.experimental.enableNativePlugin
+  const rolldownDev = config.experimental.rolldownDev
 
   return [
     depOptimizationEnabled ? optimizedDepsPlugin() : null,
@@ -125,7 +126,10 @@ export async function resolvePlugins(
     cssPlugin(config),
     config.oxc !== false
       ? enableNativePlugin
-        ? nativeTransformPlugin()
+        ? nativeTransformPlugin({
+            // TODO: how to jsx dev?
+            reactRefresh: rolldownDev?.reactRefresh,
+          })
         : oxcPlugin(config)
       : null,
     enableNativePlugin
