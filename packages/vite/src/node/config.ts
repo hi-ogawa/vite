@@ -1007,6 +1007,7 @@ export async function resolveConfig(
     process.env.NODE_ENV = defaultNodeEnv
   }
 
+  // TODO: should we make `command == "build"` on rolldown dev?
   const configEnv: ConfigEnv = {
     mode,
     command,

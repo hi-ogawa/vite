@@ -39,9 +39,8 @@ export function rolldownDevHandleConfig(config: UserConfig): UserConfig {
       noDiscovery: true,
       include: [],
     },
-    define: {
-      // TODO: use vite:define plugin
-      'process.env.NODE_ENV': "'development'",
+    experimental: {
+      enableNativePlugin: true,
     },
     environments: {
       client: {
@@ -224,8 +223,14 @@ class RolldownEnvironment extends DevEnvironment {
     // all plugins are shared like Vite 6 `sharedConfigBuild`.
     let plugins = this._plugins!
     plugins = plugins.filter(
-      // TODO: reuse core plugins
-      (p) => !(p.name?.startsWith('vite:') || p.name === 'alias'),
+      (p) =>
+        !(
+          typeof p.name === 'number' ||
+          p.name?.startsWith('vite:') ||
+          p.name === 'alias'
+        ) ||
+        // enable some core plugins
+        p.name === 'vite:define',
     )
     plugins = plugins.map((p) => injectEnvironmentToHooks(this as any, p))
 
@@ -240,7 +245,6 @@ class RolldownEnvironment extends DevEnvironment {
         mainFields: this.config.resolve.mainFields,
         symlinks: !this.config.resolve.preserveSymlinks,
       },
-      define: this.config.define,
       plugins: [
         viterollEntryPlugin(this.config, this.rolldownDevOptions),
         // TODO: how to use jsx-dev-runtime?

@@ -25,6 +25,7 @@ export default defineConfig({
   },
   experimental: {
     rolldownDev: { hmr: true, reactRefresh: true },
+    enableNativePlugin: true,
   },
   plugins: [
     {
