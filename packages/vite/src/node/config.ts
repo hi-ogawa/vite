@@ -91,6 +91,7 @@ import { resolveSSROptions } from './ssr'
 import { PartialEnvironment } from './baseEnvironment'
 import { createIdResolver } from './idResolver'
 import { type OxcOptions, convertEsbuildConfigToOxcConfig } from './plugins/oxc'
+import { rolldownDevPluginConfig } from './server/environments/rolldown'
 
 const debug = createDebugger('vite:config', { depth: 10 })
 const promisifiedRealpath = promisify(fs.realpath)
@@ -510,6 +511,9 @@ export interface ExperimentalOptions {
    * @default true
    */
   enableNativePlugin?: boolean
+
+  rolldownDev?: boolean
+  rolldownDevReactRefresh?: boolean
 }
 
 export interface LegacyOptions {
@@ -1052,6 +1056,9 @@ export async function resolveConfig(
   // run config hooks
   const userPlugins = [...prePlugins, ...normalPlugins, ...postPlugins]
   config = await runConfigHook(config, userPlugins, configEnv)
+  if (config.experimental?.rolldownDev) {
+    config = mergeConfig(config, rolldownDevPluginConfig(config))
+  }
 
   // Ensure default client and ssr environments
   // If there are present, ensure order { client, ssr, ...custom }
