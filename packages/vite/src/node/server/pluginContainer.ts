@@ -257,6 +257,9 @@ class EnvironmentPluginContainer {
   }
 
   async resolveRollupOptions(): Promise<InputOptions> {
+    if (this.environment.config.experimental.rolldownDev) {
+      return undefined!
+    }
     if (!this._resolvedRollupOptions) {
       let options = this.environment.config.build.rollupOptions
       for (const optionsHook of this.getSortedPluginHooks('options')) {
@@ -307,6 +310,9 @@ class EnvironmentPluginContainer {
   }
 
   async buildStart(_options?: InputOptions): Promise<void> {
+    if (this.environment.config.experimental.rolldownDev) {
+      return
+    }
     if (this._started) {
       if (this._buildStartPromise) {
         await this._buildStartPromise

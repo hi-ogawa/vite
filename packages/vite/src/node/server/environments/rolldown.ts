@@ -197,6 +197,11 @@ class RolldownEnvironment extends DevEnvironment {
 
   override init: DevEnvironment['init'] = async () => {
     await super.init()
+    // patch out plugin container hooks
+    assert(this._pluginContainer)
+    this._pluginContainer.resolveRollupOptions = async () => undefined!
+    this._pluginContainer.buildStart = async () => {}
+    this._pluginContainer.close = async () => {}
     await this.build()
   }
 
@@ -216,9 +221,12 @@ class RolldownEnvironment extends DevEnvironment {
       fs.rmSync(this.outDir, { recursive: true, force: true })
     }
 
-    // TODO: how to pass user plugins?
-    // simply reusing them would have a same issue as Vite 6 `sharedConfigBuild`.
-    // this.config.plugins
+    // all plugins are shared like Vite 6 `sharedConfigBuild`.
+    // TODO: setup PluginContext.environment
+    const plugins = this._plugins!.filter(
+      // TODO: reuse core plugins
+      (p) => !(p.name?.startsWith('vite:') || p.name === 'alias'),
+    )
 
     console.time(`[rolldown:${this.name}:build]`)
     const inputOptions: rolldown.InputOptions = {
@@ -242,6 +250,7 @@ class RolldownEnvironment extends DevEnvironment {
         rolldownExperimental.aliasPlugin({
           entries: this.config.resolve.alias,
         }),
+        ...plugins,
       ],
     }
     this.instance = await rolldown.rolldown(inputOptions)
