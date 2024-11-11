@@ -112,23 +112,6 @@ export function rolldownDevConfigureServer(server: ViteDevServer): void {
     await environments.client.build()
     server.ws.send({ type: 'full-reload' })
   })
-
-  // disable automatic html reload
-  // https://github.com/vitejs/vite/blob/01cf7e14ca63988c05627907e72b57002ffcb8d5/packages/vite/src/node/server/hmr.ts#L590-L595
-  const oldSend = server.ws.send
-  server.ws.send = function (...args: any) {
-    const arg = args[0]
-    if (
-      arg &&
-      typeof arg === 'object' &&
-      arg.type === 'full-reload' &&
-      typeof arg.path === 'string' &&
-      arg.path.endsWith('.html')
-    ) {
-      return
-    }
-    oldSend.apply(this, args)
-  }
 }
 
 export async function rolldownDevHandleHotUpdate(
