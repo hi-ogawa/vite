@@ -125,12 +125,18 @@ export async function resolvePlugins(
     htmlInlineProxyPlugin(config),
     cssPlugin(config),
     config.oxc !== false
-      ? enableNativePlugin
-        ? nativeTransformPlugin({
-            // TODO: how to jsx dev?
-            reactRefresh: rolldownDev?.reactRefresh,
-          })
-        : oxcPlugin(config)
+      ? rolldownDev
+        ? createBuiltinPluginWithEnvironmentSupport(
+            'native:transform',
+            (environment) =>
+              nativeTransformPlugin({
+                reactRefresh:
+                  environment.name === 'client' && rolldownDev?.reactRefresh,
+              }),
+          )
+        : enableNativePlugin
+          ? nativeTransformPlugin()
+          : oxcPlugin(config)
       : null,
     enableNativePlugin
       ? nativeJsonPlugin({

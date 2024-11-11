@@ -221,8 +221,7 @@ class RolldownEnvironment extends DevEnvironment {
 
     // all plugins are shared like Vite 6 `sharedConfigBuild`.
     let plugins = this._plugins!
-    // enable some core plugins
-    // TODO: adopt more (should we filter inside `resolvePlugins`?)
+    // TODO: enable more core plugins
     plugins = plugins.filter(
       (p) =>
         !(typeof p.name === 'number' || p.name?.startsWith('vite:')) ||
