@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
@@ -6,6 +7,11 @@ export default defineConfig({
     rolldownDev: {
       hmr: true,
       reactRefresh: true,
+    },
+  },
+  resolve: {
+    alias: {
+      'test-alias': join(import.meta.dirname, './src/test-alias-dest.tsx'),
     },
   },
   plugins: [
@@ -36,7 +42,7 @@ export default defineConfig({
         handler(id, _options) {
           if (id === '\0virtual:test') {
             console.log('[debug:load]', this.environment?.name)
-            return `export default "virtual-ok, environment.name: ${this.environment.name}"`
+            return `export default "test:virtual:ok, environment.name: ${this.environment.name}"`
           }
         },
       },

@@ -222,16 +222,13 @@ class RolldownEnvironment extends DevEnvironment {
 
     // all plugins are shared like Vite 6 `sharedConfigBuild`.
     let plugins = this._plugins!
-    // TODO: adopt more core plugins (should we filter inside `resolvePlugins`?)
+    // enable some core plugins
+    // TODO: adopt more (should we filter inside `resolvePlugins`?)
     plugins = plugins.filter(
       (p) =>
-        !(
-          typeof p.name === 'number' ||
-          p.name?.startsWith('vite:') ||
-          p.name === 'alias'
-        ) ||
-        // enable some core plugins
-        p.name === 'vite:define',
+        !(typeof p.name === 'number' || p.name?.startsWith('vite:')) ||
+        ['vite:define'].includes(p.name) ||
+        ['AliasPlugin'].includes(p.constructor.name),
     )
     plugins = plugins.map((p) => injectEnvironmentToHooks(this as any, p))
 
@@ -253,9 +250,6 @@ class RolldownEnvironment extends DevEnvironment {
           reactRefresh: this.rolldownDevOptions?.reactRefresh,
         }),
         reactRefreshPlugin(this.rolldownDevOptions),
-        rolldownExperimental.aliasPlugin({
-          entries: this.config.resolve.alias,
-        }),
         ...plugins,
       ],
     }
