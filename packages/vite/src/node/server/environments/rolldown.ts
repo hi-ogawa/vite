@@ -199,7 +199,6 @@ class RolldownEnvironment extends DevEnvironment {
     await super.init()
     // patch out plugin container hooks
     assert(this._pluginContainer)
-    this._pluginContainer.resolveRollupOptions = async () => undefined!
     this._pluginContainer.buildStart = async () => {}
     this._pluginContainer.close = async () => {}
     await this.build()
