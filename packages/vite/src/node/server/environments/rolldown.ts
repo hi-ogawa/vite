@@ -399,11 +399,11 @@ function reactRefreshPlugin(
         },
       },
       async handler(id) {
+        if (!rolldownDevOptions.reactRefresh) {
+          return `export {}`
+        }
         const resolved = require.resolve('react-refresh/runtime')
         if (id === '\0virtual:react-refresh/entry') {
-          if (!rolldownDevOptions.reactRefresh) {
-            return `export {}`
-          }
           return `
 						import runtime from ${JSON.stringify(resolved)};
 						runtime.injectIntoGlobalHook(window);
