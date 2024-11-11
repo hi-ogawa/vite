@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite'
 
+process.setSourceMapsEnabled(true)
+
 export default defineConfig({
   environments: {
     client: {
