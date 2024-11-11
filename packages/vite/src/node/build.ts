@@ -1348,6 +1348,7 @@ const relativeUrlMechanisms: Record<
     `(typeof document === 'undefined' && typeof location === 'undefined' ? ${getFileUrlFromRelativePath(
       relativePath,
     )} : ${getRelativeUrlFromDocument(relativePath, true)})`,
+  app: () => 'todo',
 }
 /* end of copy */
 
