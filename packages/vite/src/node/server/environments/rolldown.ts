@@ -13,7 +13,6 @@ import { DevEnvironment } from '../environment'
 import type {
   DevEnvironmentOptions,
   HmrContext,
-  Plugin,
   ResolvedConfig,
   UserConfig,
   ViteDevServer,
@@ -32,7 +31,7 @@ const logger = createLogger('info', {
   allowClearScreen: false,
 })
 
-export function rolldownDevPluginConfig(config: UserConfig): UserConfig {
+export function rolldownDevHandleConfig(config: UserConfig): UserConfig {
   return {
     appType: 'custom',
     optimizeDeps: {
@@ -74,63 +73,71 @@ export function rolldownDevPluginConfig(config: UserConfig): UserConfig {
   }
 }
 
-export function rolldownDevPlugin(): Plugin {
-  let server: ViteDevServer
-  let environments: Record<'client' | 'ssr', RolldownEnvironment>
-
-  return {
-    name: 'vite:rolldown-dev',
-    configureServer(server_) {
-      server = server_
-      environments = server.environments as any
-
-      // rolldown server as middleware
-      server.middlewares.use(
-        sirv(environments.client.outDir, { dev: true, extensions: ['html'] }),
-      )
-
-      // reuse /@vite/client for Websocket API but serve it on our own
-      // TODO: include it in `rolldown_runtime`?
-      const rolldownClientCode = getRolldownClientCode()
-      server.middlewares.use((req, res, next) => {
-        const url = new URL(req.url ?? '', 'https://rolldown.rs')
-        if (url.pathname === '/@rolldown/client') {
-          res.setHeader('content-type', 'text/javascript;charset=utf-8')
-          res.end(rolldownClientCode)
-          return
-        }
-        next()
-      })
-
-      // full build on non self accepting entry
-      server.ws.on('rolldown:hmr-deadend', async (data) => {
-        logger.info(`hmr-deadend '${data.moduleId}'`, { timestamp: true })
-        await environments.client.build()
-        server.ws.send({ type: 'full-reload' })
-      })
-
-      // disable automatic html reload
-      // https://github.com/vitejs/vite/blob/01cf7e14ca63988c05627907e72b57002ffcb8d5/packages/vite/src/node/server/hmr.ts#L590-L595
-      const oldSend = server.ws.send
-      server.ws.send = function (...args: any) {
-        const arg = args[0]
-        if (
-          arg &&
-          typeof arg === 'object' &&
-          arg.type === 'full-reload' &&
-          typeof arg.path === 'string' &&
-          arg.path.endsWith('.html')
-        ) {
-          return
-        }
-        oldSend.apply(this, args)
-      }
-    },
-    async handleHotUpdate(ctx) {
-      await environments.ssr.handleUpdate(ctx)
-      await environments.client.handleUpdate(ctx)
-    },
+// type casting helper
+function asRolldown(server: ViteDevServer): Omit<
+  ViteDevServer,
+  'environments'
+> & {
+  environments: {
+    client: RolldownEnvironment
+    ssr: RolldownEnvironment
   }
+} {
+  return server as any
+}
+
+export function rolldownDevConfigureServer(server: ViteDevServer): void {
+  const { environments } = asRolldown(server)
+
+  // rolldown server as middleware
+  server.middlewares.use(
+    sirv(environments.client.outDir, { dev: true, extensions: ['html'] }),
+  )
+
+  // reuse /@vite/client for Websocket API but serve it on our own
+  // TODO: include it in `rolldown_runtime`?
+  const rolldownClientCode = getRolldownClientCode()
+  server.middlewares.use((req, res, next) => {
+    const url = new URL(req.url ?? '', 'https://rolldown.rs')
+    if (url.pathname === '/@rolldown/client') {
+      res.setHeader('content-type', 'text/javascript;charset=utf-8')
+      res.end(rolldownClientCode)
+      return
+    }
+    next()
+  })
+
+  // full build on non self accepting entry
+  server.ws.on('rolldown:hmr-deadend', async (data) => {
+    logger.info(`hmr-deadend '${data.moduleId}'`, { timestamp: true })
+    await environments.client.build()
+    server.ws.send({ type: 'full-reload' })
+  })
+
+  // disable automatic html reload
+  // https://github.com/vitejs/vite/blob/01cf7e14ca63988c05627907e72b57002ffcb8d5/packages/vite/src/node/server/hmr.ts#L590-L595
+  const oldSend = server.ws.send
+  server.ws.send = function (...args: any) {
+    const arg = args[0]
+    if (
+      arg &&
+      typeof arg === 'object' &&
+      arg.type === 'full-reload' &&
+      typeof arg.path === 'string' &&
+      arg.path.endsWith('.html')
+    ) {
+      return
+    }
+    oldSend.apply(this, args)
+  }
+}
+
+export async function rolldownDevHandleHotUpdate(
+  ctx: HmrContext,
+): Promise<void> {
+  const { environments } = asRolldown(ctx.server)
+  await environments.ssr.handleUpdate(ctx)
+  await environments.client.handleUpdate(ctx)
 }
 
 function getRolldownClientCode() {
@@ -149,7 +156,7 @@ function getRolldownClientCode() {
     __HMR_CONFIG_NAME__: `""`,
     // runtime define is not necessary
     [`import '@vite/env';`]: ``,
-    [`import "@vite/env";`]: ``, // for local dev
+    [`import "@vite/env";`]: ``, // for local pnpm dev
   }
   for (const [k, v] of Object.entries(replacements)) {
     code = code.replaceAll(k, v)
@@ -166,7 +173,7 @@ window.__rolldown_hot = hot;
   return code
 }
 
-export class RolldownEnvironment extends DevEnvironment {
+class RolldownEnvironment extends DevEnvironment {
   instance!: rolldown.RolldownBuild
   result!: rolldown.RolldownOutput
   outDir!: string

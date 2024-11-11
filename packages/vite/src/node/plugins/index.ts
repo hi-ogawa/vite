@@ -168,11 +168,6 @@ export async function resolvePlugins(
         })
       : importGlobPlugin(config),
 
-    // TODO: cyclic import?
-    !isBuild &&
-      config.experimental.rolldownDev &&
-      (await import('../server/environments/rolldown')).rolldownDevPlugin(),
-
     ...postPlugins,
 
     ...buildPlugins.post,

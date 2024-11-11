@@ -22,6 +22,7 @@ import type { EnvironmentModuleNode } from './moduleGraph'
 import type { ModuleNode } from './mixedModuleGraph'
 import type { DevEnvironment } from './environment'
 import { prepareError } from './middlewares/error'
+import { rolldownDevHandleHotUpdate } from './environments/rolldown'
 import type { HttpServer } from '.'
 import { restartServerWithUrls } from '.'
 
@@ -251,6 +252,10 @@ export async function handleHMRUpdate(
   const mixedHmrContext: HmrContext = {
     ...contextMeta,
     modules: [...mixedMods],
+  }
+  if (config.experimental.rolldownDev) {
+    await rolldownDevHandleHotUpdate(mixedHmrContext)
+    return
   }
 
   const clientEnvironment = server.environments.client

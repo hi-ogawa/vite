@@ -93,7 +93,7 @@ import { createIdResolver } from './idResolver'
 import { type OxcOptions, convertEsbuildConfigToOxcConfig } from './plugins/oxc'
 import {
   type RolldownDevOptions,
-  rolldownDevPluginConfig,
+  rolldownDevHandleConfig,
 } from './server/environments/rolldown'
 
 const debug = createDebugger('vite:config', { depth: 10 })
@@ -1059,7 +1059,7 @@ export async function resolveConfig(
   const userPlugins = [...prePlugins, ...normalPlugins, ...postPlugins]
   config = await runConfigHook(config, userPlugins, configEnv)
   if (config.experimental?.rolldownDev) {
-    config = mergeConfig(config, rolldownDevPluginConfig(config))
+    config = mergeConfig(config, rolldownDevHandleConfig(config))
   }
 
   // Ensure default client and ssr environments
