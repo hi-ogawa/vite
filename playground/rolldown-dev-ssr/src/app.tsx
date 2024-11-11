@@ -1,4 +1,6 @@
 import React from 'react'
+// @ts-expect-error no type
+import virtualTest from 'virtual:test'
 
 export function App() {
   const [count, setCount] = React.useState(0)
@@ -7,6 +9,7 @@ export function App() {
       <h1>Rolldown SSR</h1>
       <Hydrated />
       <button onClick={() => setCount((c) => c + 1)}>Count: {count}</button>
+      <pre>[virtual:test] {virtualTest}</pre>
     </div>
   )
 }

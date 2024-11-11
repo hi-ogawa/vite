@@ -18,6 +18,7 @@ import type {
   ViteDevServer,
 } from '../..'
 import { CLIENT_ENTRY } from '../../constants'
+import { injectEnvironmentToHooks } from '../../build'
 
 const require = createRequire(import.meta.url)
 
@@ -221,11 +222,12 @@ class RolldownEnvironment extends DevEnvironment {
     }
 
     // all plugins are shared like Vite 6 `sharedConfigBuild`.
-    // TODO: setup PluginContext.environment
-    const plugins = this._plugins!.filter(
+    let plugins = this._plugins!
+    plugins = plugins.filter(
       // TODO: reuse core plugins
       (p) => !(p.name?.startsWith('vite:') || p.name === 'alias'),
     )
+    plugins = plugins.map((p) => injectEnvironmentToHooks(this as any, p))
 
     console.time(`[rolldown:${this.name}:build]`)
     const inputOptions: rolldown.InputOptions = {

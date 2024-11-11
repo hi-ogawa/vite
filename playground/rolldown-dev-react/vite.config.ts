@@ -36,7 +36,7 @@ export default defineConfig({
         handler(id, _options) {
           if (id === '\0virtual:test') {
             console.log('[debug:load]', this.environment?.name)
-            return `export default "virtual-ok"`
+            return `export default "virtual-ok, environment.name: ${this.environment.name}"`
           }
         },
       },
