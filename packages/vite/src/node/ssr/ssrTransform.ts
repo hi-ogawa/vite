@@ -159,6 +159,18 @@ async function ssrTransformScript(
   }
 
   function defineExport(position: number, name: string, local = name) {
+    if (!liveBindingNames.has(name)) {
+      // s.appendLeft(
+      //   position,
+      //   `\nObject.defineProperty(${ssrModuleExportsKey}, ${JSON.stringify(name)}, ` +
+      //   `{ enumerable: true, configurable: true, value: ${local} });`
+      // )
+      s.appendLeft(
+        position,
+        `\n${ssrModuleExportsKey}[${JSON.stringify(name)}] = ${local};`,
+      )
+      return
+    }
     s.appendLeft(
       position,
       `\nObject.defineProperty(${ssrModuleExportsKey}, ${JSON.stringify(name)}, ` +
@@ -220,6 +232,19 @@ async function ssrTransformScript(
       }
     }
   }
+
+  // TODO: walk once
+  const liveBindingNames = new Set<string>()
+  walk(ast, {
+    onIdentifier(id, _parent, parentStack) {
+      // TODO: detect only LHS references
+      if (parentStack.some((s) => s.type === 'AssignmentExpression')) {
+        liveBindingNames.add(id.name)
+      }
+    },
+    onDynamicImport: () => {},
+    onImportMeta: () => {},
+  })
 
   // 2. check all export statements and define exports
   for (const node of exports) {
@@ -303,10 +328,14 @@ async function ssrTransformScript(
         // export default class A {}
         const { name } = node.declaration.id
         s.remove(node.start, node.start + 15 /* 'export default '.length */)
-        s.append(
-          `\nObject.defineProperty(${ssrModuleExportsKey}, "default", ` +
-            `{ enumerable: true, configurable: true, value: ${name} });`,
-        )
+        if (liveBindingNames.has(name)) {
+          s.append(`\n${ssrModuleExportsKey}.default = ${name};`)
+        } else {
+          s.append(
+            `\nObject.defineProperty(${ssrModuleExportsKey}, "default", ` +
+              `{ enumerable: true, configurable: true, value: ${name} });`,
+          )
+        }
       } else {
         // anonymous default exports
         s.update(

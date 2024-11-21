@@ -86,7 +86,7 @@ describe('module runner initialization', async () => {
     expect(() => {
       mod.test = 'I am modified'
     }).toThrowErrorMatchingInlineSnapshot(
-      `[TypeError: Cannot set property test of [object Module] which has only a getter]`,
+      `[TypeError: Cannot assign to read only property 'test' of object '[object Module]']`,
     )
     expect(() => {
       delete mod.test
