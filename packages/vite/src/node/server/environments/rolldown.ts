@@ -235,7 +235,7 @@ class RolldownEnvironment extends DevEnvironment {
 
     const format: rolldown.ModuleFormat =
       this.name === 'client' || this.rolldownDevOptions.ssrModuleRunner
-        ? 'app'
+        ? 'experimental-app'
         : 'esm'
     this.outputOptions = {
       dir: this.outDir,
@@ -339,7 +339,7 @@ ${innerCode}
   }
 
   async import(input: string): Promise<unknown> {
-    if (this.outputOptions.format === 'app') {
+    if (this.outputOptions.format === 'experimental-app') {
       return this.getRunner().import(input)
     }
     // input is no use
