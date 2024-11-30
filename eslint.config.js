@@ -20,6 +20,7 @@ export default tseslint.config(
   {
     ignores: [
       'packages/create-vite/template-*',
+      'packages/vite/misc/rolldown-runtime.js',
       '**/dist/**',
       '**/fixtures/**',
       '**/playground-temp/**',

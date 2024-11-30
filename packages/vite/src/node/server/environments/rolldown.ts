@@ -16,7 +16,7 @@ import type {
   UserConfig,
   ViteDevServer,
 } from '../..'
-import { CLIENT_ENTRY } from '../../constants'
+import { CLIENT_ENTRY, VITE_PACKAGE_DIR } from '../../constants'
 import { injectEnvironmentToHooks } from '../../build'
 
 const require = createRequire(import.meta.url)
@@ -106,17 +106,18 @@ function asRolldown(server: ViteDevServer): Omit<
 export function rolldownDevConfigureServer(server: ViteDevServer): void {
   const { environments } = asRolldown(server)
 
-  // rolldown server as middleware
+  // rolldown assets middleware
+  server.middlewares.use(async (_req, _res, next) => {
+    try {
+      await environments.client.buildPromise
+      next()
+    } catch (e) {
+      next(e)
+    }
+  })
   server.middlewares.use(
     sirv(environments.client.outDir, { dev: true, extensions: ['html'] }),
   )
-
-  // full build on non self accepting entry
-  server.ws.on('rolldown:hmr-deadend', async (data) => {
-    logger.info(`hmr-deadend '${data.moduleId}'`, { timestamp: true })
-    await environments.client.build()
-    server.ws.send({ type: 'full-reload' })
-  })
 }
 
 export async function rolldownDevHandleHotUpdate(
@@ -138,6 +139,9 @@ class RolldownEnvironment extends DevEnvironment {
   buildTimestamp = Date.now()
   inputOptions!: rolldown.InputOptions
   outputOptions!: rolldown.OutputOptions
+  lastModules: Record<string, string | null> = {}
+  newModules: Record<string, string | null> = {}
+  buildPromise?: Promise<void>
 
   static createFactory(
     rolldownDevOptioins: RolldownDevOptions,
@@ -169,7 +173,11 @@ class RolldownEnvironment extends DevEnvironment {
     await this.instance?.close()
   }
 
-  async build(): Promise<void> {
+  async build() {
+    return (this.buildPromise = this.buildImpl())
+  }
+
+  async buildImpl() {
     if (!this.config.build.rollupOptions.input) {
       return
     }
@@ -205,7 +213,6 @@ class RolldownEnvironment extends DevEnvironment {
 
     console.time(`[rolldown:${this.name}:build]`)
     this.inputOptions = {
-      dev: this.rolldownDevOptions.hmr,
       input: this.config.build.rollupOptions.input,
       cwd: this.config.root,
       platform: this.name === 'client' ? 'browser' : 'node',
@@ -219,6 +226,24 @@ class RolldownEnvironment extends DevEnvironment {
         patchRuntimePlugin(this),
         patchCssPlugin(),
         reactRefreshPlugin(),
+        {
+          name: 'vite:rolldown-extract-hmr-chunk',
+          renderChunk: (_code, chunk) => {
+            // cf. https://github.com/web-infra-dev/rspack/blob/5a967f7a10ec51171a304a1ce8d741bd09fa8ed5/crates/rspack_plugin_hmr/src/lib.rs#L60
+            // TODO: assume single chunk for now
+            this.newModules = {}
+            const modules: Record<string, string | null> = {}
+            for (const [id, mod] of Object.entries(chunk.modules)) {
+              const current = mod.code
+              const last = this.lastModules?.[id]
+              if (current !== last) {
+                this.newModules[id] = current
+              }
+              modules[id] = current
+            }
+            this.lastModules = modules
+          },
+        },
       ],
       moduleTypes: {
         '.css': 'js',
@@ -249,6 +274,31 @@ class RolldownEnvironment extends DevEnvironment {
     console.timeEnd(`[rolldown:${this.name}:build]`)
   }
 
+  async buildHmr(file: string) {
+    logger.info(`hmr '${file}'`, { timestamp: true })
+    await this.build()
+    const stableIds: string[] = []
+    let innerCode = ''
+    for (const [id, code] of Object.entries(this.newModules)) {
+      const stableId = path.relative(this.config.root, id)
+      stableIds.push(stableId)
+      innerCode += `\
+	rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){
+		${code}
+	});
+`
+    }
+    const output = `\
+self.rolldown_runtime.patch(${JSON.stringify(stableIds)}, function(){
+${innerCode}
+});
+`
+    // dump for debugging
+    const updatePath = path.join(this.outDir, `hmr-update-${Date.now()}.js`)
+    fs.writeFileSync(updatePath, output)
+    return [updatePath, output]
+  }
+
   async handleUpdate(ctx: HmrContext): Promise<void> {
     if (!this.result) {
       return
@@ -261,9 +311,7 @@ class RolldownEnvironment extends DevEnvironment {
       this.rolldownDevOptions.hmr ||
       this.rolldownDevOptions.ssrModuleRunner
     ) {
-      logger.info(`hmr '${ctx.file}'`, { timestamp: true })
-      console.time(`[rolldown:${this.name}:hmr]`)
-      const result = await this.instance.experimental_hmr_rebuild([ctx.file])
+      const result = await this.buildHmr(ctx.file)
       if (this.name === 'client') {
         ctx.server.ws.send('rolldown:hmr', result)
       } else {
@@ -272,7 +320,6 @@ class RolldownEnvironment extends DevEnvironment {
           path.join(this.outDir, result[0]),
         )
       }
-      console.timeEnd(`[rolldown:${this.name}:hmr]`)
     } else {
       await this.build()
       if (this.name === 'client') {
@@ -379,46 +426,47 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
         )
       },
     },
-    renderChunk(code) {
-      // patch rolldown_runtime to workaround a few things
-      // TODO: is there a robust way to inject code specifically to entry or runtime?
-      if (code.includes('//#region rolldown:runtime')) {
-        // TODO: this magic string is heavy
-        const output = new MagicString(code)
-        output
-          // replace hard-coded WebSocket setup with custom client
-          .replace(
-            /const socket =.*?\n\};/s,
-            environment.name === 'client' ? getRolldownClientCode() : '',
-          )
-          // fix rolldown_runtime.patch
-          .replace(
-            'this.executeModuleStack.length > 1',
-            'this.executeModuleStack.length > 0',
-          )
-          .replace('parents: [parent],', 'parents: parent ? [parent] : [],')
-          .replace(
-            'if (module.parents.indexOf(parent) === -1) {',
-            'if (parent && module.parents.indexOf(parent) === -1) {',
-          )
-          .replace(
-            'for (var i = 0; i < module.parents.length; i++) {',
-            `
-            boundaries.push(moduleId);
-            invalidModuleIds.push(moduleId);
-            if (module.parents.filter(Boolean).length === 0) {
-              __rolldown_hot.send("rolldown:hmr-deadend", { moduleId });
-              break;
-            }
-            for (var i = 0; i < module.parents.length; i++) {`,
-          )
-        if (environment.rolldownDevOptions.reactRefresh) {
-          output.prepend(getReactRefreshRuntimeCode())
-        }
-        return {
-          code: output.toString(),
-          map: output.generateMap({ hires: 'boundary' }),
-        }
+    renderChunk(code, chunk) {
+      // silly but we can do `render_app` on our own for now
+      // https://github.com/rolldown/rolldown/blob/a29240168290e45b36fdc1a6d5c375281fb8dc3e/crates/rolldown/src/ecmascript/format/app.rs#L28-L55
+      const output = new MagicString(code)
+
+      // extract isolated module between #region and #endregion
+      const matches = code.matchAll(/^\/\/#region (.*)$/gm)
+      for (const match of matches) {
+        const stableId = match[1]!
+        const start = match.index!
+        const end = code.indexOf('//#endregion', match.index)
+        output.appendLeft(
+          start,
+          `rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){\n\n`,
+        )
+        output.appendRight(end, `\n\n});\n`)
+      }
+      assert(chunk.facadeModuleId)
+      const stableId = path.relative(
+        environment.config.root,
+        chunk.facadeModuleId,
+      )
+      output.append(
+        `\nrolldown_runtime.require(${JSON.stringify(stableId)});\n`,
+      )
+
+      // inject runtime
+      const runtimeCode = fs.readFileSync(
+        path.join(VITE_PACKAGE_DIR, 'misc', 'rolldown-runtime.js'),
+        'utf-8',
+      )
+      output.prepend(runtimeCode)
+      if (environment.name === 'client') {
+        output.prepend(getRolldownClientCode())
+      }
+      if (environment.rolldownDevOptions.reactRefresh) {
+        output.prepend(getReactRefreshRuntimeCode())
+      }
+      return {
+        code: output.toString(),
+        map: output.generateMap({ hires: 'boundary' }),
       }
     },
   }
@@ -484,7 +532,7 @@ hot.on("rolldown:hmr", (data) => {
 self.__rolldown_hot = hot;
 self.__rolldown_updateStyle = updateStyle;
 `
-  return `(() => {/*** @vite/client ***/\n${code}}\n)()`
+  return `;(() => {/*** @vite/client ***/\n${code}}\n)();`
 }
 
 function reactRefreshPlugin(): rolldown.Plugin {
