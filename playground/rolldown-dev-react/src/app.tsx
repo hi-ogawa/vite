@@ -5,9 +5,9 @@ import virtualTest from 'virtual:test'
 import testAlias from 'test-alias'
 import { throwError } from './error'
 import './test-style.css'
-// TODO: hmr for assets?
-import testStyleUrl from './test-style-url.css?url'
 import testStyleInline from './test-style-inline.css?inline'
+// TODO: hmr for url assets?
+import testStyleUrl from './test-style-url.css?url'
 
 export function App() {
   const [count, setCount] = React.useState(0)
