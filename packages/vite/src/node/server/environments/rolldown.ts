@@ -18,6 +18,7 @@ import type {
 } from '../..'
 import { CLIENT_ENTRY, VITE_PACKAGE_DIR } from '../../constants'
 import { injectEnvironmentToHooks } from '../../build'
+import { cleanUrl } from '../../../shared/utils'
 
 const require = createRequire(import.meta.url)
 
@@ -141,6 +142,7 @@ class RolldownEnvironment extends DevEnvironment {
   outputOptions!: rolldown.OutputOptions
   lastModules: Record<string, string | null> = {}
   newModules: Record<string, string | null> = {}
+  fileModuleIds = new Set<string>()
   buildPromise?: Promise<void>
 
   static createFactory(
@@ -266,6 +268,7 @@ class RolldownEnvironment extends DevEnvironment {
       modules[id] = current
     }
     this.lastModules = modules
+    this.fileModuleIds = new Set(chunk.moduleIds.map((id) => cleanUrl(id)))
 
     this.buildTimestamp = Date.now()
     console.timeEnd(`[rolldown:${this.name}:build]`)
@@ -300,8 +303,7 @@ ${innerCode}
     if (!this.result) {
       return
     }
-    const output = this.result.output[0]
-    if (!output.moduleIds.includes(ctx.file)) {
+    if (!this.fileModuleIds.has(ctx.file)) {
       return
     }
     if (
