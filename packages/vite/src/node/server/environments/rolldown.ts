@@ -19,6 +19,7 @@ import type {
 import { CLIENT_ENTRY, VITE_PACKAGE_DIR } from '../../constants'
 import { injectEnvironmentToHooks } from '../../build'
 import { cleanUrl } from '../../../shared/utils'
+import { generatedAssetsMap } from '../../plugins/asset'
 
 const require = createRequire(import.meta.url)
 
@@ -142,6 +143,7 @@ class RolldownEnvironment extends DevEnvironment {
   outputOptions!: rolldown.OutputOptions
   lastModules: Record<string, string | null> = {}
   newModules: Record<string, string | null> = {}
+  lastAssets: Record<string, string> = {}
   fileModuleIds = new Set<string>()
   buildPromise?: Promise<void>
 
@@ -232,6 +234,10 @@ class RolldownEnvironment extends DevEnvironment {
       moduleTypes: {
         '.css': 'js',
       },
+      // TODO: isolating finalizer doesn't rewrite yet
+      // experimental: {
+      //   resolveNewUrlToAsset: true,
+      // },
     }
     this.instance = await rolldown.rolldown(this.inputOptions)
 
@@ -254,6 +260,23 @@ class RolldownEnvironment extends DevEnvironment {
     // `generate` should work but we use `write` so it's easier to see output and debug
     this.result = await this.instance.write(this.outputOptions)
 
+    // find changed assets
+    const changedAssets: string[] = []
+    for (const [id, { content }] of generatedAssetsMap.get(this) ?? []) {
+      if (content) {
+        const data = content.toString('utf8')
+        if (this.lastAssets[id] !== data) {
+          changedAssets.push(id)
+        }
+        this.lastAssets[id] = data
+      }
+    }
+    // detect change of content of assert url placeholder __VITE_ASSET__xxx
+    const changedAssetsRegex = new RegExp(
+      // eslint-disable-next-line
+      `__VITE_ASSET__(${changedAssets.join('|')})__`,
+    )
+
     // extract hmr chunk
     // cf. https://github.com/web-infra-dev/rspack/blob/5a967f7a10ec51171a304a1ce8d741bd09fa8ed5/crates/rspack_plugin_hmr/src/lib.rs#L60
     const chunk = this.result.output[0]
@@ -262,6 +285,12 @@ class RolldownEnvironment extends DevEnvironment {
     for (const [id, mod] of Object.entries(chunk.modules)) {
       const current = mod.code
       const last = this.lastModules?.[id]
+      if (current?.match(changedAssetsRegex)) {
+        // TODO:
+        // need to replace __VITE_ASSET__xxx
+        // we should property run `renderChunk` to hmr chunk too
+        this.newModules[id] = current
+      }
       if (current !== last) {
         this.newModules[id] = current
       }
@@ -426,6 +455,8 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
       },
     },
     renderChunk(code, chunk) {
+      // TODO: this magic string is heavy
+
       // silly but we can do `render_app` on our own for now
       // https://github.com/rolldown/rolldown/blob/a29240168290e45b36fdc1a6d5c375281fb8dc3e/crates/rolldown/src/ecmascript/format/app.rs#L28-L55
       const output = new MagicString(code)
