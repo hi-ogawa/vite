@@ -20,6 +20,8 @@ import type {
 import { CLIENT_ENTRY, VITE_PACKAGE_DIR } from '../../constants'
 import { injectEnvironmentToHooks } from '../../build'
 import { cleanUrl } from '../../../shared/utils'
+import { combineSourcemaps } from '../../utils'
+import { genSourceMapUrl } from '../sourcemap'
 
 const require = createRequire(import.meta.url)
 
@@ -289,7 +291,17 @@ class RolldownEnvironment extends DevEnvironment {
       `self.rolldown_runtime.patch(${JSON.stringify(stableIds)}, function(){\n`,
     )
     output.append('\n});')
-    return [updatePath, output.toString()]
+    let outputString = output.toString()
+    if (chunk.map) {
+      // collapse sourcemap
+      const map = combineSourcemaps(chunk.fileName, [
+        output.generateMap({ hires: 'boundary' }) as any,
+        chunk.map as any,
+      ])
+      outputString = outputString.replace(/^\/\/# sourceMappingURL=.*/gm, '')
+      outputString += `\n//# sourceMappingURL=${genSourceMapUrl(map as any)}`
+    }
+    return [updatePath, outputString]
   }
 
   async handleUpdate(ctx: HmrContext): Promise<void> {
