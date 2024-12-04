@@ -270,10 +270,12 @@ class RolldownEnvironment extends DevEnvironment {
 
   async buildHmr(file: string) {
     logger.info(`hmr '${file}'`, { timestamp: true })
+    console.time(`[rolldown:${this.name}:rebuild]`)
     const result = await this.instance.build()
     this.fileModuleIds = new Set(
       this.result.output[0].moduleIds.map((id) => cleanUrl(id)),
     )
+    console.timeEnd(`[rolldown:${this.name}:rebuild]`)
     const chunk = result.output.find(
       (v) => v.type === 'chunk' && v.name === 'hmr-update',
     )
