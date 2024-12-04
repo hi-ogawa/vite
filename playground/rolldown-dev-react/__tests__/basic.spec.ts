@@ -66,4 +66,14 @@ test.runIf(!isBuild)('hmr css', async () => {
     )
     .toBe('rgb(0, 128, 0)')
   await page.getByRole('button', { name: 'Count: 2' }).click()
+
+  editFile('./src/test-style-url.css', (s) => s.replace('orange', 'red'))
+  await expect
+    .poll(() =>
+      page
+        .locator('.test-style-url')
+        .evaluate((el) => getComputedStyle(el).color),
+    )
+    .toBe('rgb(255, 0, 0)')
+  await page.getByRole('button', { name: 'Count: 3' }).click()
 })

@@ -20,7 +20,6 @@ import type {
 import { CLIENT_ENTRY, VITE_PACKAGE_DIR } from '../../constants'
 import { injectEnvironmentToHooks } from '../../build'
 import { cleanUrl } from '../../../shared/utils'
-import { generatedAssetsMap } from '../../plugins/asset'
 
 const require = createRequire(import.meta.url)
 
@@ -261,48 +260,9 @@ class RolldownEnvironment extends DevEnvironment {
       output: this.outputOptions,
     })
     this.result = await this.instance.build()
-
-    // `generate` should work but we use `write` so it's easier to see output and debug
-    // this.result = await this.instance.write(this.outputOptions)
-
-    // find changed assets
-    const changedAssets: string[] = []
-    for (const [id, { content }] of generatedAssetsMap.get(this) ?? []) {
-      if (content) {
-        const data = content.toString('utf8')
-        if (this.lastAssets[id] !== data) {
-          changedAssets.push(id)
-        }
-        this.lastAssets[id] = data
-      }
-    }
-    // detect change of content of assert url placeholder __VITE_ASSET__xxx
-    const changedAssetsRegex = new RegExp(
-      // eslint-disable-next-line
-      `__VITE_ASSET__(${changedAssets.join('|')})__`,
+    this.fileModuleIds = new Set(
+      this.result.output[0].moduleIds.map((id) => cleanUrl(id)),
     )
-
-    // extract hmr chunk
-    // cf. https://github.com/web-infra-dev/rspack/blob/5a967f7a10ec51171a304a1ce8d741bd09fa8ed5/crates/rspack_plugin_hmr/src/lib.rs#L60
-    const chunk = this.result.output[0]
-    this.newModules = {}
-    const modules: Record<string, string | null> = {}
-    for (const [id, mod] of Object.entries(chunk.modules)) {
-      const current = mod.code
-      const last = this.lastModules?.[id]
-      if (current?.match(changedAssetsRegex)) {
-        // TODO:
-        // need to replace __VITE_ASSET__xxx
-        // we should property run `renderChunk` to hmr chunk too
-        this.newModules[id] = current
-      }
-      if (current !== last) {
-        this.newModules[id] = current
-      }
-      modules[id] = current
-    }
-    this.lastModules = modules
-    this.fileModuleIds = new Set(chunk.moduleIds.map((id) => cleanUrl(id)))
 
     this.buildTimestamp = Date.now()
     console.timeEnd(`[rolldown:${this.name}:build]`)
@@ -311,6 +271,9 @@ class RolldownEnvironment extends DevEnvironment {
   async buildHmr(file: string) {
     logger.info(`hmr '${file}'`, { timestamp: true })
     const result = await this.instance.build()
+    this.fileModuleIds = new Set(
+      this.result.output[0].moduleIds.map((id) => cleanUrl(id)),
+    )
     const chunk = result.output.find(
       (v) => v.type === 'chunk' && v.name === 'hmr-update',
     )
