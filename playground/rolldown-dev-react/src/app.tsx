@@ -6,7 +6,6 @@ import testAlias from 'test-alias'
 import { throwError } from './error'
 import './test-style.css'
 import testStyleInline from './test-style-inline.css?inline'
-// TODO: hmr for url assets?
 import testStyleUrl from './test-style-url.css?url'
 
 // TODO: isolating finalizer doesn't rewrite yet
