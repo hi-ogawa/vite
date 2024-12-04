@@ -284,22 +284,7 @@ class RolldownEnvironment extends DevEnvironment {
       return [updatePath, '']
     }
     assert(chunk.type === 'chunk')
-    const code = chunk.code
-    const output = new MagicString(code)
-    // extract isolated module between #region and #endregion
-    const matches = chunk.code.matchAll(/^\/\/#region (.*)$/gm)
-    const stableIds: string[] = []
-    for (const match of matches) {
-      const stableId = match[1]!
-      stableIds.push(stableId)
-      const start = match.index!
-      const end = code.indexOf('//#endregion', match.index)
-      output.appendLeft(
-        start,
-        `rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){\n\n`,
-      )
-      output.appendRight(end, `\n\n});\n`)
-    }
+    const { output, stableIds } = patchIsolatedModuleChunk(chunk.code)
     output.prepend(
       `self.rolldown_runtime.patch(${JSON.stringify(stableIds)}, function(){\n`,
     )
@@ -359,6 +344,27 @@ class RolldownEnvironment extends DevEnvironment {
     // return import(`${pathToFileURL(filepath)}`)
     return import(`${pathToFileURL(filepath)}?t=${this.buildTimestamp}`)
   }
+}
+
+function patchIsolatedModuleChunk(code: string) {
+  // silly but we can do `render_app` on our own for now.
+  // extract isolated module between #region and #endregion then wrap by rolldown_runtime.define.
+  // https://github.com/rolldown/rolldown/blob/a29240168290e45b36fdc1a6d5c375281fb8dc3e/crates/rolldown/src/ecmascript/format/app.rs#L28-L55
+  const output = new MagicString(code)
+  const matches = code.matchAll(/^\/\/#region (.*)$/gm)
+  const stableIds: string[] = []
+  for (const match of matches) {
+    const stableId = match[1]!
+    stableIds.push(stableId)
+    const start = match.index!
+    const end = code.indexOf('//#endregion', match.index)
+    output.appendLeft(
+      start,
+      `rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){\n\n`,
+    )
+    output.appendRight(end, `\n\n});\n`)
+  }
+  return { output, stableIds }
 }
 
 class RolldownModuleRunner {
@@ -438,23 +444,7 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
         return
       }
       // TODO: this magic string is heavy
-
-      // silly but we can do `render_app` on our own for now
-      // https://github.com/rolldown/rolldown/blob/a29240168290e45b36fdc1a6d5c375281fb8dc3e/crates/rolldown/src/ecmascript/format/app.rs#L28-L55
-      const output = new MagicString(code)
-
-      // extract isolated module between #region and #endregion
-      const matches = code.matchAll(/^\/\/#region (.*)$/gm)
-      for (const match of matches) {
-        const stableId = match[1]!
-        const start = match.index!
-        const end = code.indexOf('//#endregion', match.index)
-        output.appendLeft(
-          start,
-          `rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){\n\n`,
-        )
-        output.appendRight(end, `\n\n});\n`)
-      }
+      const { output } = patchIsolatedModuleChunk(code)
       assert(chunk.facadeModuleId)
       const stableId = path.relative(
         environment.config.root,
