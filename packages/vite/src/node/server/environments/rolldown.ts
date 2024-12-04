@@ -5,7 +5,8 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import MagicString from 'magic-string'
-import * as rolldown from 'rolldown'
+import type * as rolldown from 'rolldown'
+import * as rolldownExperimental from 'rolldown/experimental'
 import sirv from 'sirv'
 import { createLogger } from '../../publicUtils'
 import { DevEnvironment } from '../environment'
@@ -135,7 +136,7 @@ export async function rolldownDevHandleHotUpdate(
 //
 
 class RolldownEnvironment extends DevEnvironment {
-  instance!: rolldown.RolldownBuild
+  instance!: Awaited<ReturnType<typeof rolldownExperimental.rebuild>>
   result!: rolldown.RolldownOutput
   outDir!: string
   buildTimestamp = Date.now()
@@ -185,8 +186,6 @@ class RolldownEnvironment extends DevEnvironment {
     if (!this.config.build.rollupOptions.input) {
       return
     }
-
-    await this.instance?.close()
 
     if (this.config.build.emptyOutDir !== false) {
       fs.rmSync(this.outDir, { recursive: true, force: true })
@@ -239,7 +238,6 @@ class RolldownEnvironment extends DevEnvironment {
       //   resolveNewUrlToAsset: true,
       // },
     }
-    this.instance = await rolldown.rolldown(this.inputOptions)
 
     const format: rolldown.ModuleFormat =
       this.name === 'client' || this.rolldownDevOptions.ssrModuleRunner
@@ -257,8 +255,15 @@ class RolldownEnvironment extends DevEnvironment {
           ? `import __nodeModule from "node:module"; const require = __nodeModule.createRequire(import.meta.url);`
           : undefined,
     }
+
+    this.instance = await rolldownExperimental.rebuild({
+      ...this.inputOptions,
+      output: this.outputOptions,
+    })
+    this.result = await this.instance.build()
+
     // `generate` should work but we use `write` so it's easier to see output and debug
-    this.result = await this.instance.write(this.outputOptions)
+    // this.result = await this.instance.write(this.outputOptions)
 
     // find changed assets
     const changedAssets: string[] = []
@@ -305,27 +310,36 @@ class RolldownEnvironment extends DevEnvironment {
 
   async buildHmr(file: string) {
     logger.info(`hmr '${file}'`, { timestamp: true })
-    await this.build()
-    const stableIds: string[] = []
-    let innerCode = ''
-    for (const [id, code] of Object.entries(this.newModules)) {
-      const stableId = path.relative(this.config.root, id)
-      stableIds.push(stableId)
-      innerCode += `\
-	rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){
-		${code}
-	});
-`
+    const result = await this.instance.build()
+    const chunk = result.output.find(
+      (v) => v.type === 'chunk' && v.name === 'hmr-update',
+    )
+    const updatePath = path.join(this.outDir, 'hmr-update.js')
+    if (!chunk) {
+      return [updatePath, '']
     }
-    const output = `\
-self.rolldown_runtime.patch(${JSON.stringify(stableIds)}, function(){
-${innerCode}
-});
-`
-    // dump for debugging
-    const updatePath = path.join(this.outDir, `hmr-update-${Date.now()}.js`)
-    fs.writeFileSync(updatePath, output)
-    return [updatePath, output]
+    assert(chunk.type === 'chunk')
+    const code = chunk.code
+    const output = new MagicString(code)
+    // extract isolated module between #region and #endregion
+    const matches = chunk.code.matchAll(/^\/\/#region (.*)$/gm)
+    const stableIds: string[] = []
+    for (const match of matches) {
+      const stableId = match[1]!
+      stableIds.push(stableId)
+      const start = match.index!
+      const end = code.indexOf('//#endregion', match.index)
+      output.appendLeft(
+        start,
+        `rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){\n\n`,
+      )
+      output.appendRight(end, `\n\n});\n`)
+    }
+    output.prepend(
+      `self.rolldown_runtime.patch(${JSON.stringify(stableIds)}, function(){\n`,
+    )
+    output.append('\n});')
+    return [updatePath, output.toString()]
   }
 
   async handleUpdate(ctx: HmrContext): Promise<void> {
@@ -455,6 +469,9 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
       },
     },
     renderChunk(code, chunk) {
+      if (!chunk.isEntry) {
+        return
+      }
       // TODO: this magic string is heavy
 
       // silly but we can do `render_app` on our own for now
