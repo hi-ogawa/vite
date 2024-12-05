@@ -8,13 +8,5 @@ export default defineConfig({
       hmr: true,
     },
   },
-  plugins: [
-    vue(),
-    {
-      name: 'debug',
-      buildEnd(err) {
-        console.log('[buildEnd]', err)
-      },
-    },
-  ],
+  plugins: [vue()],
 })

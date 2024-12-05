@@ -244,7 +244,8 @@ class RolldownEnvironment extends DevEnvironment {
             },
             handler(code) {
               const output = new MagicString(code)
-              output.replaceAll('import.meta.hot', 'module.hot')
+              output.replaceAll('import.meta.hot.accept', 'module.hot.accept')
+              output.replaceAll('import.meta.hot.on', 'self.__rolldown_hot.on')
               return { code: output.toString(), map: output.generateMap() }
             },
           },
