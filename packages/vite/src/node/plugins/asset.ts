@@ -49,6 +49,7 @@ const assetCache = new WeakMap<Environment, Map<string, string>>()
 export interface GeneratedAssetMeta {
   originalFileName: string | undefined
   isEntry?: boolean
+  content?: Buffer
 }
 export const generatedAssetsMap = new WeakMap<
   Environment,
@@ -421,7 +422,9 @@ async function fileToBuiltUrl(
       originalFileName,
       source: content,
     })
-    generatedAssetsMap.get(environment)!.set(referenceId, { originalFileName })
+    generatedAssetsMap
+      .get(environment)!
+      .set(referenceId, { originalFileName, content })
 
     url = `__VITE_ASSET__${referenceId}__${postfix ? `$_${postfix}__` : ``}`
   }

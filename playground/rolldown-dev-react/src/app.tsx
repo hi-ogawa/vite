@@ -5,9 +5,13 @@ import virtualTest from 'virtual:test'
 import testAlias from 'test-alias'
 import { throwError } from './error'
 import './test-style.css'
-// TODO: hmr for assets?
-import testStyleUrl from './test-style-url.css?url'
 import testStyleInline from './test-style-inline.css?inline'
+// TODO: hmr for url assets?
+import testStyleUrl from './test-style-url.css?url'
+
+// TODO: isolating finalizer doesn't rewrite yet
+// const testAssetTxt = new URL('./test-asset.txt', import.meta.url).href;
+// console.log(testAssetTxt);
 
 export function App() {
   const [count, setCount] = React.useState(0)

@@ -60,7 +60,8 @@ describe('build', () => {
     assertOutputHashContentChange(result[0], result[1])
   })
 
-  test('file hash should change when pure css chunk changes', async () => {
+  // https://github.com/rolldown/rolldown/issues/3049
+  test.skip('file hash should change when pure css chunk changes', async () => {
     const buildProject = async (cssColor: string) => {
       return (await build({
         root: resolve(__dirname, 'packages/build-project'),
