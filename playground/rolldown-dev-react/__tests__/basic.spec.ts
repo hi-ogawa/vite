@@ -78,7 +78,7 @@ test.runIf(!isBuild)('hmr css', async () => {
   await page.getByRole('button', { name: 'Count: 3' }).click()
 })
 
-test.runIf(!isBuild).only('hmr new file', async () => {
+test.runIf(!isBuild)('hmr new file', async () => {
   await page.goto(viteTestUrl)
   await page.getByRole('button', { name: 'Count: 0' }).click()
 
