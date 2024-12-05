@@ -126,6 +126,8 @@ var rolldown_runtime = (self.rolldown_runtime = {
             })
           }
         },
+        // TODO: import.meta.hot.on
+        on: () => {},
       },
     })
     this.executeModuleStack.push(id)

@@ -205,6 +205,7 @@ class RolldownEnvironment extends DevEnvironment {
           'vite:css',
           'vite:css-post',
           'vite:asset',
+          'vite:vue',
         ].includes(p.name) ||
         [
           'AliasPlugin',
@@ -230,6 +231,20 @@ class RolldownEnvironment extends DevEnvironment {
         patchRuntimePlugin(this),
         patchCssPlugin(),
         reactRefreshPlugin(),
+        {
+          // TODO: import.meta not supported by app format
+          name: 'patch-import-meta',
+          transform: {
+            filter: {
+              code: [/import\.meta\.hot/],
+            },
+            handler(code) {
+              const output = new MagicString(code)
+              output.replaceAll('import.meta.hot', 'module.hot')
+              return { code: output.toString(), map: output.generateMap() }
+            },
+          },
+        },
       ],
       moduleTypes: {
         '.css': 'js',
