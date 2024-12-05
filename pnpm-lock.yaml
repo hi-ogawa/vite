@@ -1357,6 +1357,16 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1
 
+  playground/rolldown-dev-vue:
+    dependencies:
+      vue:
+        specifier: ^3.5.13
+        version: 3.5.13(typescript@5.6.3)
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^5.2.1
+        version: 5.2.1(vite@packages+vite)(vue@3.5.13(typescript@5.6.3))
+
   playground/self-referencing: {}
 
   playground/ssr:
@@ -3339,6 +3349,13 @@ packages:
 
   '@vitejs/plugin-vue@5.1.4':
     resolution: {integrity: sha512-N2XSI2n3sQqp5w7Y/AN/L2XDjBIRGqXko+eDp42sydYSBeJuSm5a1sLf8zakmo8u7tA8NmBgoDLA1HeOESjp9A==}
+    engines: {node: ^18.0.0 || >=20.0.0}
+    peerDependencies:
+      vite: workspace:*
+      vue: ^3.2.25
+
+  '@vitejs/plugin-vue@5.2.1':
+    resolution: {integrity: sha512-cxh314tzaWwOLqVes2gnnCtvBDcM1UMdn+iFR+UjAn411dPT3tOmqrJjbMd7koZpMAmBM/GqeV4n9ge7JSiJJQ==}
     engines: {node: ^18.0.0 || >=20.0.0}
     peerDependencies:
       vite: workspace:*
@@ -9074,6 +9091,11 @@ snapshots:
   '@vitejs/longfilename-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@file:playground/optimize-deps/longfilename': {}
 
   '@vitejs/plugin-vue@5.1.4(vite@packages+vite)(vue@3.5.13(typescript@5.6.3))':
+    dependencies:
+      vite: link:packages/vite
+      vue: 3.5.13(typescript@5.6.3)
+
+  '@vitejs/plugin-vue@5.2.1(vite@packages+vite)(vue@3.5.13(typescript@5.6.3))':
     dependencies:
       vite: link:packages/vite
       vue: 3.5.13(typescript@5.6.3)

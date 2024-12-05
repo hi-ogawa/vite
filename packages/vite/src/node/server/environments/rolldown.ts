@@ -171,6 +171,10 @@ class RolldownEnvironment extends DevEnvironment {
     assert(this._pluginContainer)
     this._pluginContainer.buildStart = async () => {}
     this._pluginContainer.close = async () => {}
+  }
+
+  // delay build till listen since some plugins expect `configureServer` before build
+  override listen: DevEnvironment['listen'] = async () => {
     await this.build()
   }
 
@@ -205,6 +209,7 @@ class RolldownEnvironment extends DevEnvironment {
           'vite:css',
           'vite:css-post',
           'vite:asset',
+          'vite:vue',
         ].includes(p.name) ||
         [
           'AliasPlugin',
@@ -230,6 +235,21 @@ class RolldownEnvironment extends DevEnvironment {
         patchRuntimePlugin(this),
         patchCssPlugin(),
         reactRefreshPlugin(),
+        {
+          // TODO: import.meta not supported by app format
+          name: 'patch-import-meta',
+          transform: {
+            filter: {
+              code: [/import\.meta\.hot/],
+            },
+            handler(code) {
+              const output = new MagicString(code)
+              output.replaceAll('import.meta.hot.accept', 'module.hot.accept')
+              output.replaceAll('import.meta.hot.on', 'self.__rolldown_hot.on')
+              return { code: output.toString(), map: output.generateMap() }
+            },
+          },
+        },
       ],
       moduleTypes: {
         '.css': 'js',
@@ -310,6 +330,12 @@ class RolldownEnvironment extends DevEnvironment {
     }
     if (!this.fileModuleIds.has(ctx.file)) {
       return
+    }
+    for (const plugin of this.plugins) {
+      // TODO: for now, simple hack for vue hmr
+      if (plugin.name === 'vite:vue') {
+        ;(plugin.handleHotUpdate as any)(ctx)
+      }
     }
     if (
       this.rolldownDevOptions.hmr ||
