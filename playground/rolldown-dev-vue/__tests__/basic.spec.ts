@@ -13,6 +13,6 @@ test.runIf(!isBuild)('hmr js', async () => {
   editFile('./src/App.vue', (s) => s.replace('Count:', 'Count-x:'))
   await page.getByRole('button', { name: 'Count-x: 1' }).click()
 
-  editFile('./src/app.tsx', (s) => s.replace('Count-x:', 'Count:'))
+  editFile('./src/App.vue', (s) => s.replace('Count-x:', 'Count:'))
   await page.getByRole('button', { name: 'Count: 2' }).click()
 })

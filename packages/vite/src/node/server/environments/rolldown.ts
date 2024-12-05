@@ -331,6 +331,12 @@ class RolldownEnvironment extends DevEnvironment {
     if (!this.fileModuleIds.has(ctx.file)) {
       return
     }
+    for (const plugin of this.plugins) {
+      // TODO: for now, simple hack for vue hmr
+      if (plugin.name === 'vite:vue') {
+        ;(plugin.handleHotUpdate as any)(ctx)
+      }
+    }
     if (
       this.rolldownDevOptions.hmr ||
       this.rolldownDevOptions.ssrModuleRunner
