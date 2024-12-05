@@ -171,6 +171,10 @@ class RolldownEnvironment extends DevEnvironment {
     assert(this._pluginContainer)
     this._pluginContainer.buildStart = async () => {}
     this._pluginContainer.close = async () => {}
+  }
+
+  // delay build till listen since some plugins expect `configureServer` before build
+  override listen: DevEnvironment['listen'] = async () => {
     await this.build()
   }
 
