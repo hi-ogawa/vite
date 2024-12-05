@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { editFile, isBuild, page, viteTestUrl } from '../../test-utils'
+import { addFile, editFile, isBuild, page, viteTestUrl } from '../../test-utils'
 
 test('basic', async () => {
   await page.getByRole('button', { name: 'Count: 0' }).click()
@@ -76,4 +76,19 @@ test.runIf(!isBuild)('hmr css', async () => {
     )
     .toBe('rgb(255, 0, 0)')
   await page.getByRole('button', { name: 'Count: 3' }).click()
+})
+
+test.runIf(!isBuild).only('hmr new file', async () => {
+  await page.goto(viteTestUrl)
+  await page.getByRole('button', { name: 'Count: 0' }).click()
+
+  addFile('./src/new-file.ts', 'export default "[new-file:ok]"')
+  editFile(
+    './src/app.tsx',
+    (s) =>
+      'import newFile from "./new-file";\n' +
+      s.replace('Count:', 'Count-{newFile}:'),
+  )
+
+  await page.getByRole('button', { name: 'Count-[new-file:ok]: 1' }).click()
 })
