@@ -412,9 +412,7 @@ class RolldownModuleRunner {
     __rolldown_hot: {
       send: () => {},
     },
-    // TODO: external require doesn't work in app format.
-    // TODO: also it should be aware of importer for non static require/import.
-    _require: require,
+    __require_external: require,
   }
 
   // TODO: support resolution?
@@ -458,25 +456,6 @@ ${sourcemap}
 function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
   return {
     name: 'vite:rolldown-patch-runtime',
-    // TODO: external require doesn't work in app format.
-    // rewrite `require -> _require` and provide _require from module runner.
-    // for now just rewrite known ones in "react-dom/server".
-    transform: {
-      filter: {
-        code: {
-          include: [/require\(['"](stream|util)['"]\)/],
-        },
-      },
-      handler(code) {
-        if (!environment.rolldownDevOptions.ssrModuleRunner) {
-          return
-        }
-        return code.replace(
-          /require(\(['"](stream|util)['"]\))/g,
-          '_require($1)',
-        )
-      },
-    },
     renderChunk(code, chunk) {
       if (!chunk.isEntry) {
         return
