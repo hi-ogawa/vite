@@ -109,6 +109,10 @@ var rolldown_runtime = (self.rolldown_runtime = {
     }
     var factory = this.moduleFactoryMap[id]
     if (!factory) {
+      // handle external
+      if (typeof __require_external !== 'undefined') {
+        return __require_external(id)
+      }
       throw new Error('Module not found: ' + id)
     }
     var module = (this.moduleCache[id] = {
