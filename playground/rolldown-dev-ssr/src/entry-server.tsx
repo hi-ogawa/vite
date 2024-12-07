@@ -20,7 +20,7 @@ const handler: Connect.SimpleHandleFunction = (req, res) => {
 	</head>
 	<body>
 		<div id="root">${ssrHtml}</div>
-		<script src="/entry-client.js"></script>
+		<script type="module" src="/entry-client.js"></script>
 	</body>
 </html>
 `)

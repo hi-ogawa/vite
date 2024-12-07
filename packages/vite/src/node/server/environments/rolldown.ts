@@ -596,12 +596,12 @@ function getReactRefreshRuntimeCode() {
     (() => {
       __react_refresh_runtime.injectIntoGlobalHook(self);
 
-      __react_refresh_transform_define = (file) => [
+      self.__react_refresh_transform_define = (file) => [
         __react_refresh_runtime.createSignatureFunctionForTransform,
         (type, id) => __react_refresh_runtime.register(type, file + '_' + id)
       ];
 
-      __react_refresh_transform_setupHot = (hot) => {
+      self.__react_refresh_transform_setupHot = (hot) => {
         hot.accept((prev) => {
           debouncedRefresh();
         });
