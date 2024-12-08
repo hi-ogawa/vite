@@ -329,8 +329,7 @@ class RolldownEnvironment extends DevEnvironment {
         return
       }
       if (this.name === 'client') {
-        // TODO: let client requests a file so it will be on network devtool.
-        ctx.server.ws.send('rolldown:hmr', chunk.code)
+        ctx.server.ws.send('rolldown:hmr', chunk.fileName)
       } else {
         this.getRunner().evaluate(
           chunk.code,
@@ -516,7 +515,7 @@ function getRolldownClientCode() {
   code += `
 const hot = createHotContext("/__rolldown");
 hot.on("rolldown:hmr", (data) => {
-  (0, eval)(data);
+  import("/" + data + "?t=" + Date.now());
 });
 self.__rolldown_hot = hot;
 self.__rolldown_updateStyle = updateStyle;
