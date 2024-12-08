@@ -82,6 +82,12 @@ var __toBinary = /* @__PURE__ */ (() => {
   }
 })()
 
+// TODO: for now need to expose these utilities used by IsolatingModuleFinalizermodule
+self.__toCommonJS = __toCommonJS
+self.__toESM = __toESM
+self.__export = __export
+self.__reExport = __reExport
+
 var rolldown_runtime = (self.rolldown_runtime = {
   patching: false,
   patchedModuleFactoryMap: {},

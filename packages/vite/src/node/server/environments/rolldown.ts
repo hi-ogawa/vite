@@ -434,10 +434,6 @@ class RolldownModuleRunner {
     }
     code = `\
 'use strict';(${Object.keys(context).join(',')})=>{{${code}
-// TODO: need to re-expose runtime utilities for now
-self.__toCommonJS = __toCommonJS;
-self.__export = __export;
-self.__toESM = __toESM;
 }}
 //# sourceURL=${sourceURL}
 //# sourceMappingSource=rolldown-module-runner
@@ -596,12 +592,12 @@ function getReactRefreshRuntimeCode() {
     (() => {
       __react_refresh_runtime.injectIntoGlobalHook(self);
 
-      __react_refresh_transform_define = (file) => [
+      self.__react_refresh_transform_define = (file) => [
         __react_refresh_runtime.createSignatureFunctionForTransform,
         (type, id) => __react_refresh_runtime.register(type, file + '_' + id)
       ];
 
-      __react_refresh_transform_setupHot = (hot) => {
+      self.__react_refresh_transform_setupHot = (hot) => {
         hot.accept((prev) => {
           debouncedRefresh();
         });
