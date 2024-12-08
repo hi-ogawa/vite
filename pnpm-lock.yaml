@@ -1325,6 +1325,8 @@ importers:
         specifier: 0.10.64
         version: 0.10.64
 
+  playground/rolldown-dev-mpa: {}
+
   playground/rolldown-dev-react:
     dependencies:
       react:

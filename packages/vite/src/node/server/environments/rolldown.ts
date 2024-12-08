@@ -279,13 +279,19 @@ class RolldownEnvironment extends DevEnvironment {
       ...this.inputOptions,
       output: this.outputOptions,
     })
-    this.result = await this.instance.build()
-    this.fileModuleIds = new Set(
-      this.result.output[0].moduleIds.map((id) => cleanUrl(id)),
-    )
+    await this.buildInner()
 
     this.buildTimestamp = Date.now()
     console.timeEnd(`[rolldown:${this.name}:build]`)
+  }
+
+  async buildInner() {
+    this.result = await this.instance.build()
+    this.fileModuleIds = new Set(
+      this.result.output
+        .flatMap((c) => (c.type === 'chunk' ? c.moduleIds : []))
+        .map((id) => cleanUrl(id)),
+    )
   }
 
   async buildHmr(
@@ -293,12 +299,9 @@ class RolldownEnvironment extends DevEnvironment {
   ): Promise<rolldown.RolldownOutputChunk | undefined> {
     logger.info(`hmr '${file}'`, { timestamp: true })
     console.time(`[rolldown:${this.name}:rebuild]`)
-    const result = await this.instance.build()
-    this.fileModuleIds = new Set(
-      this.result.output[0].moduleIds.map((id) => cleanUrl(id)),
-    )
+    await this.buildInner()
     console.timeEnd(`[rolldown:${this.name}:rebuild]`)
-    const chunk = result.output.find(
+    const chunk = this.result.output.find(
       (v) => v.type === 'chunk' && v.name === 'hmr-update',
     )
     if (chunk) {
