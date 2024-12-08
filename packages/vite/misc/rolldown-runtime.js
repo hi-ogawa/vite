@@ -82,33 +82,15 @@ var __toBinary = /* @__PURE__ */ (() => {
   }
 })()
 
-// TODO: for now need to expose these utilities used by IsolatingModuleFinalizermodule
-self.__toCommonJS = __toCommonJS
-self.__toESM = __toESM
-self.__export = __export
-self.__reExport = __reExport
-
-var rolldown_runtime = (self.rolldown_runtime = {
-  patching: false,
-  patchedModuleFactoryMap: {},
+self.__rolldown_runtime = {
   executeModuleStack: [],
   moduleCache: {},
   moduleFactoryMap: {},
-  define: function (id, factory) {
-    if (self.patching) {
-      this.patchedModuleFactoryMap[id] = factory
-    } else {
-      this.moduleFactoryMap[id] = factory
-    }
-  },
   require: function (id) {
-    const parent =
-      this.executeModuleStack.length >= 1
-        ? this.executeModuleStack[this.executeModuleStack.length - 1]
-        : null
+    const parent = this.executeModuleStack.at(-1)
     if (this.moduleCache[id]) {
       var module = this.moduleCache[id]
-      if (parent && module.parents.indexOf(parent) === -1) {
+      if (parent && !module.parents.includes(parent)) {
         module.parents.push(parent)
       }
       return module.exports
@@ -139,25 +121,31 @@ var rolldown_runtime = (self.rolldown_runtime = {
       },
     })
     this.executeModuleStack.push(id)
-    factory(this.require.bind(this), module, module.exports)
+    factory({
+      require: this.require.bind(this),
+      module,
+      exports: module.exports,
+      __toCommonJS,
+      __toESM,
+      __export,
+      __reExport,
+    })
     this.executeModuleStack.pop()
     return module.exports
   },
-  patch: function (updateModuleIds, callback) {
-    self.patching = true
-
-    callback()
-
+  patch: function (newModuleFactoryMap) {
     var boundaries = []
     var invalidModuleIds = []
     var acceptCallbacks = []
 
+    const updateModuleIds = Object.keys(newModuleFactoryMap)
     for (var i = 0; i < updateModuleIds.length; i++) {
       foundBoundariesAndInvalidModuleIds(
         updateModuleIds[i],
         boundaries,
         invalidModuleIds,
         acceptCallbacks,
+        this.moduleCache,
       )
     }
 
@@ -166,10 +154,7 @@ var rolldown_runtime = (self.rolldown_runtime = {
       delete this.moduleCache[id]
     }
 
-    for (var id in this.patchedModuleFactoryMap) {
-      this.moduleFactoryMap[id] = this.patchedModuleFactoryMap[id]
-    }
-    this.patchedModuleFactoryMap = {}
+    Object.assign(this.moduleFactoryMap, newModuleFactoryMap)
 
     for (var i = 0; i < boundaries.length; i++) {
       this.require(boundaries[i])
@@ -183,13 +168,12 @@ var rolldown_runtime = (self.rolldown_runtime = {
       )
     }
 
-    self.patching = false
-
     function foundBoundariesAndInvalidModuleIds(
       updateModuleId,
       boundaries,
       invalidModuleIds,
       acceptCallbacks,
+      moduleCache,
     ) {
       var queue = [{ moduleId: updateModuleId, chain: [updateModuleId] }]
       var visited = {}
@@ -203,7 +187,7 @@ var rolldown_runtime = (self.rolldown_runtime = {
           continue
         }
 
-        var module = rolldown_runtime.moduleCache[moduleId]
+        var module = moduleCache[moduleId]
         if (!module) {
           continue
         }
@@ -244,4 +228,4 @@ var rolldown_runtime = (self.rolldown_runtime = {
       }
     }
   },
-})
+}
