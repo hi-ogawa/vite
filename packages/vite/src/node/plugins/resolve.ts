@@ -237,6 +237,7 @@ export function oxcResolvePlugin(
         const filteredNoExternal = noExternal as true | string[]
 
         return viteResolvePlugin({
+          dedupe: [],
           resolveOptions: {
             isBuild: options.isBuild,
             isProduction: options.isProduction,

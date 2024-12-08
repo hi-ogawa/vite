@@ -307,10 +307,8 @@ class RolldownEnvironment extends DevEnvironment {
     }
     assert(chunk.type === 'chunk')
     const { output, stableIds } = patchIsolatedModuleChunk(chunk.code)
-    output.prepend(
-      `self.rolldown_runtime.patch(${JSON.stringify(stableIds)}, function(){\n`,
-    )
-    output.append('\n});')
+    output.replace(/^\/\/# sourceMappingURL=.*/gm, '')
+    output.append(`__rolldown_runtime.patch(${JSON.stringify(stableIds)});\n`)
     let outputString = output.toString()
     if (chunk.map) {
       // collapse sourcemap
@@ -318,7 +316,6 @@ class RolldownEnvironment extends DevEnvironment {
         output.generateMap({ hires: 'boundary' }) as any,
         chunk.map as any,
       ])
-      outputString = outputString.replace(/^\/\/# sourceMappingURL=.*/gm, '')
       outputString += `\n//# sourceMappingURL=${genSourceMapUrl(map as any)}`
     }
     return [updatePath, outputString]
@@ -394,13 +391,13 @@ function patchIsolatedModuleChunk(code: string) {
   for (const match of matches) {
     const stableId = match[1]!
     stableIds.push(stableId)
-    const start = match.index!
-    const end = code.indexOf('//#endregion', match.index)
-    output.appendLeft(
-      start,
-      `rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){\n\n`,
-    )
-    output.appendRight(end, `\n\n});\n`)
+    // const start = match.index!
+    // const end = code.indexOf('//#endregion', match.index)
+    // output.appendLeft(
+    //   start,
+    //   `rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){\n\n`,
+    // )
+    // output.appendRight(end, `\n\n});\n`)
   }
   return { output, stableIds }
 }
@@ -464,7 +461,7 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
         chunk.facadeModuleId,
       )
       output.append(
-        `\nrolldown_runtime.require(${JSON.stringify(stableId)});\n`,
+        `\n__rolldown_runtime.require(${JSON.stringify(stableId)});\n`,
       )
 
       // inject runtime
