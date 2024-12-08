@@ -434,10 +434,6 @@ class RolldownModuleRunner {
     }
     code = `\
 'use strict';(${Object.keys(context).join(',')})=>{{${code}
-// TODO: need to re-expose runtime utilities for now
-self.__toCommonJS = __toCommonJS;
-self.__export = __export;
-self.__toESM = __toESM;
 }}
 //# sourceURL=${sourceURL}
 //# sourceMappingSource=rolldown-module-runner
