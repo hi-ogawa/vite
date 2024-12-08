@@ -20,8 +20,6 @@ import type {
 import { CLIENT_ENTRY, VITE_PACKAGE_DIR } from '../../constants'
 import { injectEnvironmentToHooks } from '../../build'
 import { cleanUrl } from '../../../shared/utils'
-import { combineSourcemaps } from '../../utils'
-import { genSourceMapUrl } from '../sourcemap'
 
 const require = createRequire(import.meta.url)
 
@@ -290,7 +288,9 @@ class RolldownEnvironment extends DevEnvironment {
     console.timeEnd(`[rolldown:${this.name}:build]`)
   }
 
-  async buildHmr(file: string) {
+  async buildHmr(
+    file: string,
+  ): Promise<rolldown.RolldownOutputChunk | undefined> {
     logger.info(`hmr '${file}'`, { timestamp: true })
     console.time(`[rolldown:${this.name}:rebuild]`)
     const result = await this.instance.build()
@@ -301,24 +301,10 @@ class RolldownEnvironment extends DevEnvironment {
     const chunk = result.output.find(
       (v) => v.type === 'chunk' && v.name === 'hmr-update',
     )
-    const updatePath = path.join(this.outDir, 'hmr-update.js')
-    if (!chunk) {
-      return [updatePath, '']
+    if (chunk) {
+      assert(chunk.type === 'chunk')
+      return chunk
     }
-    assert(chunk.type === 'chunk')
-    const { output, stableIds } = patchIsolatedModuleChunk(chunk.code)
-    output.replace(/^\/\/# sourceMappingURL=.*/gm, '')
-    output.append(`__rolldown_runtime.patch(${JSON.stringify(stableIds)});\n`)
-    let outputString = output.toString()
-    if (chunk.map) {
-      // collapse sourcemap
-      const map = combineSourcemaps(chunk.fileName, [
-        output.generateMap({ hires: 'boundary' }) as any,
-        chunk.map as any,
-      ])
-      outputString += `\n//# sourceMappingURL=${genSourceMapUrl(map as any)}`
-    }
-    return [updatePath, outputString]
   }
 
   async handleUpdate(ctx: HmrContext): Promise<void> {
@@ -338,13 +324,17 @@ class RolldownEnvironment extends DevEnvironment {
       this.rolldownDevOptions.hmr ||
       this.rolldownDevOptions.ssrModuleRunner
     ) {
-      const result = await this.buildHmr(ctx.file)
+      const chunk = await this.buildHmr(ctx.file)
+      if (!chunk) {
+        return
+      }
       if (this.name === 'client') {
-        ctx.server.ws.send('rolldown:hmr', result)
+        // TODO: let client requests a file so it will be on network devtool.
+        ctx.server.ws.send('rolldown:hmr', chunk.code)
       } else {
         this.getRunner().evaluate(
-          result[1].toString(),
-          path.join(this.outDir, result[0]),
+          chunk.code,
+          path.join(this.outDir, chunk.fileName),
         )
       }
     } else {
@@ -381,56 +371,31 @@ class RolldownEnvironment extends DevEnvironment {
   }
 }
 
-function patchIsolatedModuleChunk(code: string) {
-  // silly but we can do `render_app` on our own for now.
-  // extract isolated module between #region and #endregion then wrap by rolldown_runtime.define.
-  // https://github.com/rolldown/rolldown/blob/a29240168290e45b36fdc1a6d5c375281fb8dc3e/crates/rolldown/src/ecmascript/format/app.rs#L28-L55
-  const output = new MagicString(code)
-  const matches = code.matchAll(/^\/\/#region (.*)$/gm)
-  const stableIds: string[] = []
-  for (const match of matches) {
-    const stableId = match[1]!
-    stableIds.push(stableId)
-    // const start = match.index!
-    // const end = code.indexOf('//#endregion', match.index)
-    // output.appendLeft(
-    //   start,
-    //   `rolldown_runtime.define(${JSON.stringify(stableId)},function(require, module, exports){\n\n`,
-    // )
-    // output.appendRight(end, `\n\n});\n`)
-  }
-  return { output, stableIds }
-}
-
 class RolldownModuleRunner {
   // intercept globals
   private context = {
-    rolldown_runtime: {} as any,
-    __rolldown_hot: {
-      send: () => {},
+    // TODO: avoid "self" on module runner
+    self: {
+      __rolldown_runtime: {} as any,
     },
     __require_external: require,
   }
 
   // TODO: support resolution?
   async import(id: string): Promise<unknown> {
-    const mod = this.context.rolldown_runtime.moduleCache[id]
+    const mod = this.context.self.__rolldown_runtime.moduleCache[id]
     assert(mod, `Module not found '${id}'`)
     return mod.exports
   }
 
   evaluate(code: string, sourceURL: string) {
-    const context = {
-      self: this.context,
-      ...this.context,
-    }
     // extract sourcemap and move to the bottom
     const sourcemap = code.match(/^\/\/# sourceMappingURL=.*/m)?.[0] ?? ''
     if (sourcemap) {
       code = code.replace(sourcemap, '')
     }
     code = `\
-'use strict';(${Object.keys(context).join(',')})=>{{${code}
+'use strict';(${Object.keys(this.context).join(',')})=>{{${code}
 }}
 //# sourceURL=${sourceURL}
 //# sourceMappingSource=rolldown-module-runner
@@ -438,7 +403,7 @@ ${sourcemap}
 `
     const fn = (0, eval)(code)
     try {
-      fn(...Object.values(context))
+      fn(...Object.values(this.context))
     } catch (e) {
       console.error('[RolldownModuleRunner:ERROR]', e)
       throw e
@@ -450,35 +415,47 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
   return {
     name: 'vite:rolldown-patch-runtime',
     renderChunk(code, chunk) {
-      if (!chunk.isEntry) {
-        return
-      }
       // TODO: this magic string is heavy
-      const { output } = patchIsolatedModuleChunk(code)
-      assert(chunk.facadeModuleId)
-      const stableId = path.relative(
-        environment.config.root,
-        chunk.facadeModuleId,
-      )
-      output.append(
-        `\n__rolldown_runtime.require(${JSON.stringify(stableId)});\n`,
-      )
 
-      // inject runtime
-      const runtimeCode = fs.readFileSync(
-        path.join(VITE_PACKAGE_DIR, 'misc', 'rolldown-runtime.js'),
-        'utf-8',
-      )
-      output.prepend(runtimeCode)
-      if (environment.name === 'client') {
-        output.prepend(getRolldownClientCode())
+      if (chunk.name === 'hmr-update') {
+        const output = new MagicString(code)
+        output.append(`
+self.__rolldown_runtime.patch(__rolldown_modules);
+`)
+        return {
+          code: output.toString(),
+          map: output.generateMap({ hires: 'boundary' }),
+        }
       }
-      if (environment.rolldownDevOptions.reactRefresh) {
-        output.prepend(getReactRefreshRuntimeCode())
-      }
-      return {
-        code: output.toString(),
-        map: output.generateMap({ hires: 'boundary' }),
+
+      if (chunk.isEntry) {
+        const output = new MagicString(code)
+        assert(chunk.facadeModuleId)
+        const stableId = path.relative(
+          environment.config.root,
+          chunk.facadeModuleId,
+        )
+        output.append(`
+Object.assign(self.__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
+self.__rolldown_runtime.require(${JSON.stringify(stableId)});
+`)
+
+        // inject runtime
+        const runtimeCode = fs.readFileSync(
+          path.join(VITE_PACKAGE_DIR, 'misc', 'rolldown-runtime.js'),
+          'utf-8',
+        )
+        output.prepend(runtimeCode)
+        if (environment.name === 'client') {
+          output.prepend(getRolldownClientCode())
+        }
+        if (environment.rolldownDevOptions.reactRefresh) {
+          output.prepend(getReactRefreshRuntimeCode())
+        }
+        return {
+          code: output.toString(),
+          map: output.generateMap({ hires: 'boundary' }),
+        }
       }
     },
   }
@@ -539,7 +516,7 @@ function getRolldownClientCode() {
   code += `
 const hot = createHotContext("/__rolldown");
 hot.on("rolldown:hmr", (data) => {
-  (0, eval)(data[1]);
+  (0, eval)(data);
 });
 self.__rolldown_hot = hot;
 self.__rolldown_updateStyle = updateStyle;

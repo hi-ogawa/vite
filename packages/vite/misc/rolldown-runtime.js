@@ -83,21 +83,9 @@ var __toBinary = /* @__PURE__ */ (() => {
 })()
 
 self.__rolldown_runtime = {
-  // patching: false,
-  // patchedModuleFactoryMap: {},
   executeModuleStack: [],
   moduleCache: {},
   moduleFactoryMap: {},
-  modules(modules) {
-    Object.assign(this.moduleFactoryMap, modules)
-  },
-  // define: function (id, factory) {
-  //   if (this.patching) {
-  //     this.patchedModuleFactoryMap[id] = factory
-  //   } else {
-  //     this.moduleFactoryMap[id] = factory
-  //   }
-  // },
   require: function (id) {
     const parent = this.executeModuleStack.at(-1)
     if (this.moduleCache[id]) {
@@ -145,15 +133,12 @@ self.__rolldown_runtime = {
     this.executeModuleStack.pop()
     return module.exports
   },
-  patch: function (updateModuleIds) {
-    // this.patching = true
-
-    // callback()
-
+  patch: function (newModuleFactoryMap) {
     var boundaries = []
     var invalidModuleIds = []
     var acceptCallbacks = []
 
+    const updateModuleIds = Object.keys(newModuleFactoryMap)
     for (var i = 0; i < updateModuleIds.length; i++) {
       foundBoundariesAndInvalidModuleIds(
         updateModuleIds[i],
@@ -169,10 +154,7 @@ self.__rolldown_runtime = {
       delete this.moduleCache[id]
     }
 
-    for (var id in this.patchedModuleFactoryMap) {
-      this.moduleFactoryMap[id] = this.patchedModuleFactoryMap[id]
-    }
-    this.patchedModuleFactoryMap = {}
+    Object.assign(this.moduleFactoryMap, newModuleFactoryMap)
 
     for (var i = 0; i < boundaries.length; i++) {
       this.require(boundaries[i])
@@ -185,8 +167,6 @@ self.__rolldown_runtime = {
         item.deps.map((dep) => this.moduleCache[dep].exports),
       )
     }
-
-    this.patching = false
 
     function foundBoundariesAndInvalidModuleIds(
       updateModuleId,
