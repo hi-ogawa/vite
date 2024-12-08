@@ -11,6 +11,12 @@ test('basic', async () => {
   expect(await res.text()).toContain('hydrated: <!-- -->false')
 })
 
+test.runIf(!isBuild)('server stacktrace', async () => {
+  const res = await page.goto(viteTestUrl + '/crash-ssr')
+  expect(await res?.text()).toContain('src/error.ts:8:9')
+  expect(res?.status()).toBe(500)
+})
+
 test.runIf(!isBuild)('hmr', async () => {
   await page.goto(viteTestUrl)
   await page.getByRole('button', { name: 'Count: 0' }).click()
