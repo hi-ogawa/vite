@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   clearScreen: false,
-  root: './src',
   environments: {
     client: {
       build: {
