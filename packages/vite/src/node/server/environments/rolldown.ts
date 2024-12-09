@@ -294,20 +294,22 @@ class RolldownEnvironment extends DevEnvironment {
     )
   }
 
-  async buildHmr(
-    file: string,
-  ): Promise<rolldown.RolldownOutputChunk | undefined> {
+  async buildHmr(file: string): Promise<{
+    manifest: ChunkManifest
+    chunk?: rolldown.RolldownOutputChunk
+  }> {
     logger.info(`hmr '${file}'`, { timestamp: true })
     console.time(`[rolldown:${this.name}:rebuild]`)
     await this.buildInner()
     console.timeEnd(`[rolldown:${this.name}:rebuild]`)
+    const manifest = getChunkManifest(this.result.output)
     const chunk = this.result.output.find(
       (v) => v.type === 'chunk' && v.name === 'hmr-update',
     )
     if (chunk) {
       assert(chunk.type === 'chunk')
-      return chunk
     }
+    return { manifest, chunk }
   }
 
   async handleUpdate(ctx: HmrContext): Promise<void> {
@@ -327,17 +329,20 @@ class RolldownEnvironment extends DevEnvironment {
       this.rolldownDevOptions.hmr ||
       this.rolldownDevOptions.ssrModuleRunner
     ) {
-      const chunk = await this.buildHmr(ctx.file)
-      if (!chunk) {
-        return
-      }
+      const result = await this.buildHmr(ctx.file)
       if (this.name === 'client') {
-        ctx.server.ws.send('rolldown:hmr', chunk.fileName)
+        ctx.server.ws.send('rolldown:hmr', {
+          manifest: result.manifest,
+          fileName: result.chunk?.fileName,
+        })
       } else {
-        this.getRunner().evaluate(
-          chunk.code,
-          path.join(this.outDir, chunk.fileName),
-        )
+        // TODO: manifest
+        if (result.chunk) {
+          this.getRunner().evaluate(
+            result.chunk.code,
+            path.join(this.outDir, result.chunk.fileName),
+          )
+        }
       }
     } else {
       await this.build()
@@ -418,6 +423,7 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
     name: 'vite:rolldown-patch-runtime',
     renderChunk(code, chunk) {
       // TODO: this magic string is heavy
+      // (append only so no need to generate sourcemap?)
 
       if (chunk.name === 'hmr-update') {
         const output = new MagicString(code)
@@ -472,14 +478,8 @@ self.__rolldown_runtime.require(${JSON.stringify(stableId)});
       }
     },
     generateBundle(_options, bundle) {
-      // inject chunk manifest to entries
-      // TODO: update manifest on rebuild via __rolldown_hot
-      const manifest: Record<string, string> = {}
-      for (const chunk of Object.values(bundle)) {
-        if (chunk.name) {
-          manifest[chunk.name] = chunk.fileName
-        }
-      }
+      // inject chunk manifest
+      const manifest = getChunkManifest(Object.values(bundle))
       for (const chunk of Object.values(bundle)) {
         if (chunk.type === 'chunk' && chunk.isEntry) {
           chunk.code += `
@@ -490,6 +490,20 @@ self.__rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
       }
     },
   }
+}
+
+type ChunkManifest = Record<string, string>
+
+function getChunkManifest(
+  outputs: (rolldown.RolldownOutputChunk | rolldown.RolldownOutputAsset)[],
+): ChunkManifest {
+  const manifest: Record<string, string> = {}
+  for (const chunk of outputs) {
+    if (chunk.name) {
+      manifest[chunk.name] = chunk.fileName
+    }
+  }
+  return manifest
 }
 
 function moveInlineSourcemapToEnd(code: string) {
@@ -555,7 +569,10 @@ function getRolldownClientCode() {
   code += `
 const hot = createHotContext("/__rolldown");
 hot.on("rolldown:hmr", (data) => {
-  import("/" + data + "?t=" + Date.now());
+  self.__rolldown_runtime.manifest = data.manifest;
+  if (data.fileName) {
+    import("/" + data.fileName + "?t=" + Date.now());
+  }
 });
 self.__rolldown_hot = hot;
 self.__rolldown_updateStyle = updateStyle;
