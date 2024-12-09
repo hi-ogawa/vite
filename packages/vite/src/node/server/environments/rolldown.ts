@@ -473,6 +473,7 @@ self.__rolldown_runtime.require(${JSON.stringify(stableId)});
     },
     generateBundle(_options, bundle) {
       // inject chunk manifest to entries
+      // TODO: update manifest on rebuild via __rolldown_hot
       const manifest: Record<string, string> = {}
       for (const chunk of Object.values(bundle)) {
         if (chunk.name) {
