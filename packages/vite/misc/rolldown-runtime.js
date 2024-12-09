@@ -229,14 +229,22 @@ self.__rolldown_runtime = {
       }
     }
   },
-  /**
-   * @type {Record<string, string>}
-   */
+  /** @type {{ chunks: Record<string, { fileName: string, imports: string[] }> }} */
   manifest: {},
   /**
    * @param {string} chunkName
    */
   async ensureChunk(chunkName) {
-    await import('/' + this.manifest[chunkName])
+    await this.ensureChunkDeps(chunkName)
+    const file = this.manifest.chunks[chunkName].fileName
+    await import(`/${file}`)
+  },
+  /**
+   * @param {string} chunkName
+   */
+  async ensureChunkDeps(chunkName) {
+    for (const file of this.manifest.chunks[chunkName].imports) {
+      await import(`/${file}`)
+    }
   },
 }

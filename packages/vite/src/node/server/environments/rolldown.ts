@@ -338,7 +338,9 @@ class RolldownEnvironment extends DevEnvironment {
       } else {
         // TODO: manifest
         if (result.chunk) {
-          this.getRunner().evaluate(
+          await (
+            await this.getRunner()
+          ).evaluate(
             result.chunk.code,
             path.join(this.outDir, result.chunk.fileName),
           )
@@ -354,20 +356,20 @@ class RolldownEnvironment extends DevEnvironment {
 
   runner!: RolldownModuleRunner
 
-  getRunner() {
+  async getRunner() {
     if (!this.runner) {
       const output = this.result.output[0]
       const filepath = path.join(this.outDir, output.fileName)
       this.runner = new RolldownModuleRunner()
       const code = fs.readFileSync(filepath, 'utf-8')
-      this.runner.evaluate(code, filepath)
+      await this.runner.evaluate(code, filepath)
     }
     return this.runner
   }
 
   async import(input: string): Promise<unknown> {
     if (this.outputOptions.format === 'experimental-app') {
-      return this.getRunner().import(input)
+      return (await this.getRunner()).import(input)
     }
     // input is no use
     const output = this.result.output[0]
@@ -395,14 +397,14 @@ class RolldownModuleRunner {
     return mod.exports
   }
 
-  evaluate(code: string, sourceURL: string) {
+  async evaluate(code: string, sourceURL: string) {
     // extract sourcemap and move to the bottom
     const sourcemap = code.match(/^\/\/# sourceMappingURL=.*/m)?.[0] ?? ''
     if (sourcemap) {
       code = code.replace(sourcemap, '')
     }
     code = `\
-'use strict';(${Object.keys(this.context).join(',')})=>{{${code}
+'use strict';async (${Object.keys(this.context).join(',')})=>{{${code}
 }}
 //# sourceURL=${sourceURL}
 //# sourceMappingSource=rolldown-module-runner
@@ -410,7 +412,7 @@ ${sourcemap}
 `
     const fn = (0, eval)(code)
     try {
-      fn(...Object.values(this.context))
+      await fn(...Object.values(this.context))
     } catch (e) {
       console.error('[RolldownModuleRunner:ERROR]', e)
       throw e
@@ -421,70 +423,57 @@ ${sourcemap}
 function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
   return {
     name: 'vite:rolldown-patch-runtime',
-    renderChunk(code, chunk) {
-      // TODO: this magic string is heavy
-      // (append only so no need to generate sourcemap?)
-
-      if (chunk.name === 'hmr-update') {
-        const output = new MagicString(code)
-        output.append(`
-self.__rolldown_runtime.patch(__rolldown_modules);
-`)
-        return {
-          code: output.toString(),
-          map: output.generateMap({ hires: 'boundary' }),
-        }
-      }
-
-      if (chunk.isDynamicEntry) {
-        const output = new MagicString(code)
-        output.append(`
-Object.assign(self.__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
-`)
-        return {
-          code: output.toString(),
-          map: output.generateMap({ hires: 'boundary' }),
-        }
-      }
-
-      if (chunk.isEntry) {
-        const output = new MagicString(code)
-        assert(chunk.facadeModuleId)
-        const stableId = path.relative(
-          environment.config.root,
-          chunk.facadeModuleId,
-        )
-        output.append(`
-Object.assign(self.__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
-self.__rolldown_runtime.require(${JSON.stringify(stableId)});
-`)
-
-        // inject runtime
-        const runtimeCode = fs.readFileSync(
-          path.join(VITE_PACKAGE_DIR, 'misc', 'rolldown-runtime.js'),
-          'utf-8',
-        )
-        output.prepend(runtimeCode)
-        if (environment.name === 'client') {
-          output.prepend(getRolldownClientCode())
-        }
-        if (environment.rolldownDevOptions.reactRefresh) {
-          output.prepend(getReactRefreshRuntimeCode())
-        }
-        return {
-          code: output.toString(),
-          map: output.generateMap({ hires: 'boundary' }),
-        }
+    renderChunk(code) {
+      // TODO: source map is broken otherwise
+      const output = new MagicString(code)
+      return {
+        code: output.toString(),
+        map: output.generateMap({ hires: 'boundary' }),
       }
     },
     generateBundle(_options, bundle) {
       // inject chunk manifest
       const manifest = getChunkManifest(Object.values(bundle))
       for (const chunk of Object.values(bundle)) {
-        if (chunk.type === 'chunk' && chunk.isEntry) {
-          chunk.code += `
+        if (chunk.type === 'chunk') {
+          if (chunk.isEntry) {
+            chunk.code +=
+              '\n;' +
+              fs.readFileSync(
+                path.join(VITE_PACKAGE_DIR, 'misc', 'rolldown-runtime.js'),
+                'utf-8',
+              )
+            if (environment.name === 'client') {
+              chunk.code += getRolldownClientCode()
+            }
+            if (environment.rolldownDevOptions.reactRefresh) {
+              chunk.code += getReactRefreshRuntimeCode()
+            }
+            chunk.code += `
 self.__rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
 `
+          }
+          if (chunk.name === 'hmr-update') {
+            chunk.code += `
+self.__rolldown_runtime.patch(__rolldown_modules);
+`
+          } else {
+            // TODO: avoid top-level-await?
+            chunk.code += `
+Object.assign(self.__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
+await self.__rolldown_runtime.ensureChunkDeps(${JSON.stringify(chunk.name)});
+`
+          }
+          if (chunk.isEntry) {
+            assert(chunk.facadeModuleId)
+            const stableId = path.relative(
+              environment.config.root,
+              chunk.facadeModuleId,
+            )
+            chunk.code += `
+self.__rolldown_runtime.require(${JSON.stringify(stableId)});
+`
+          }
           chunk.code = moveInlineSourcemapToEnd(chunk.code)
         }
       }
@@ -492,15 +481,20 @@ self.__rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
   }
 }
 
-type ChunkManifest = Record<string, string>
+export type ChunkManifest = {
+  chunks: Record<string, { fileName: string; imports: string[] }>
+}
 
 function getChunkManifest(
   outputs: (rolldown.RolldownOutputChunk | rolldown.RolldownOutputAsset)[],
 ): ChunkManifest {
-  const manifest: Record<string, string> = {}
+  const manifest: ChunkManifest = {
+    chunks: {},
+  }
   for (const chunk of outputs) {
-    if (chunk.name) {
-      manifest[chunk.name] = chunk.fileName
+    if (chunk.type === 'chunk') {
+      const { fileName, imports } = chunk
+      manifest.chunks[chunk.name] = { fileName, imports }
     }
   }
   return manifest
@@ -577,7 +571,7 @@ hot.on("rolldown:hmr", (data) => {
 self.__rolldown_hot = hot;
 self.__rolldown_updateStyle = updateStyle;
 `
-  return `;(() => {/*** @vite/client ***/\n${code}}\n)();`
+  return `\n;(() => {/*** @vite/client ***/\n${code}}\n)();\n`
 }
 
 function reactRefreshPlugin(): rolldown.Plugin {
@@ -615,7 +609,7 @@ function getReactRefreshRuntimeCode() {
     'utf-8',
   )
   const output = new MagicString(code)
-  output.prepend('self.__react_refresh_runtime = {};\n')
+  output.prepend('\n;self.__react_refresh_runtime = {};\n')
   output.replaceAll('process.env.NODE_ENV !== "production"', 'true')
   output.replaceAll(/\bexports\./g, '__react_refresh_runtime.')
   output.append(`
