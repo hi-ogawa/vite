@@ -122,9 +122,10 @@ self.__rolldown_runtime = {
     })
     this.executeModuleStack.push(id)
     factory({
-      require: this.require.bind(this),
       module,
       exports: module.exports,
+      require: this.require.bind(this),
+      ensureChunk: this.ensureChunk.bind(this),
       __toCommonJS,
       __toESM,
       __export,
@@ -226,6 +227,24 @@ self.__rolldown_runtime = {
 
         visited[moduleId] = true
       }
+    }
+  },
+  /** @type {{ chunks: Record<string, { fileName: string, imports: string[] }> }} */
+  manifest: {},
+  /**
+   * @param {string} chunkName
+   */
+  async ensureChunk(chunkName) {
+    await this.ensureChunkDeps(chunkName)
+    const file = this.manifest.chunks[chunkName].fileName
+    await import(`/${file}`)
+  },
+  /**
+   * @param {string} chunkName
+   */
+  async ensureChunkDeps(chunkName) {
+    for (const file of this.manifest.chunks[chunkName].imports) {
+      await import(`/${file}`)
     }
   },
 }

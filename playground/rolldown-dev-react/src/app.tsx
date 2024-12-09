@@ -7,6 +7,7 @@ import { throwError } from './error'
 import './test-style.css'
 import testStyleInline from './test-style-inline.css?inline'
 import testStyleUrl from './test-style-url.css?url'
+import { DynamicImport } from './dynamic-import'
 
 // TODO: isolating finalizer doesn't rewrite yet
 // const testAssetTxt = new URL('./test-asset.txt', import.meta.url).href;
@@ -36,6 +37,7 @@ export function App() {
         <pre>
           [css?inline] <span className="test-style-inline">orange</span>
         </pre>
+        <DynamicImport />
       </div>
     </div>
   )
