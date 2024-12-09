@@ -122,9 +122,10 @@ self.__rolldown_runtime = {
     })
     this.executeModuleStack.push(id)
     factory({
-      require: this.require.bind(this),
       module,
       exports: module.exports,
+      require: this.require.bind(this),
+      ensureChunk: this.ensureChunk.bind(this),
       __toCommonJS,
       __toESM,
       __export,
