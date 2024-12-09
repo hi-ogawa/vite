@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { addFile, editFile, isBuild, page, viteTestUrl } from '../../test-utils'
 
 test('basic', async () => {
@@ -91,4 +91,29 @@ test.runIf(!isBuild)('hmr new file', async () => {
   )
 
   await page.getByRole('button', { name: 'Count-[new-file:ok]: 1' }).click()
+})
+
+test('dynamic import chunk', async () => {
+  await page.goto(viteTestUrl)
+  await page.locator('.test-dynamic-import button').click()
+  await expect
+    .poll(() => page.textContent('.test-dynamic-import'))
+    .toContain('[ok]')
+})
+
+test.runIf(!isBuild)('dynamic import chunk update', async () => {
+  await page.goto(viteTestUrl)
+  editFile('./src/dynamic-import-dep.ts', (s) => s.replace('[ok]', '[ok-edit]'))
+  await vi.waitFor(
+    async () => {
+      await page.locator('.test-dynamic-import button').click()
+      await expect
+        .poll(() => page.textContent('.test-dynamic-import'))
+        .toContain('[ok-edit]')
+    },
+    {
+      timeout: 2000,
+      interval: 500,
+    },
+  )
 })
