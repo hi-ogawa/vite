@@ -430,6 +430,17 @@ self.__rolldown_runtime.patch(__rolldown_modules);
         }
       }
 
+      if (chunk.isDynamicEntry) {
+        const output = new MagicString(code)
+        output.append(`
+Object.assign(self.__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
+`)
+        return {
+          code: output.toString(),
+          map: output.generateMap({ hires: 'boundary' }),
+        }
+      }
+
       if (chunk.isEntry) {
         const output = new MagicString(code)
         assert(chunk.facadeModuleId)
@@ -460,7 +471,32 @@ self.__rolldown_runtime.require(${JSON.stringify(stableId)});
         }
       }
     },
+    generateBundle(_options, bundle) {
+      // inject chunk manifest to entries
+      const manifest: Record<string, string> = {}
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.name) {
+          manifest[chunk.name] = chunk.fileName
+        }
+      }
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type === 'chunk' && chunk.isEntry) {
+          chunk.code += `
+self.__rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
+`
+          chunk.code = moveInlineSourcemapToEnd(chunk.code)
+        }
+      }
+    },
   }
+}
+
+function moveInlineSourcemapToEnd(code: string) {
+  const sourcemap = code.match(/^\/\/# sourceMappingURL=.*/m)?.[0]
+  if (sourcemap) {
+    code = code.replace(sourcemap, '') + '\n' + sourcemap
+  }
+  return code
 }
 
 // patch vite:css transform for hmr

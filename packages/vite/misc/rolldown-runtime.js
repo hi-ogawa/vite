@@ -230,12 +230,13 @@ self.__rolldown_runtime = {
     }
   },
   /**
+   * @type {Record<string, string>}
+   */
+  manifest: {},
+  /**
    * @param {string} chunkName
    */
   async ensureChunk(chunkName) {
-    // TODO: chunk manifest? (need to inject from generateBundle?)
-    const chunkPath = chunkName
-    const data = await import(chunkPath)
-    Object.assign(this.moduleFactoryMap, data.default)
+    await import('/' + this.manifest[chunkName])
   },
 }
