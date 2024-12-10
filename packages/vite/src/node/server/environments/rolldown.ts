@@ -8,7 +8,7 @@ import MagicString from 'magic-string'
 import type * as rolldown from 'rolldown'
 import * as rolldownExperimental from 'rolldown/experimental'
 import sirv from 'sirv'
-import { createLogger } from '../../publicUtils'
+import { createLogger, normalizePath } from '../../publicUtils'
 import { DevEnvironment } from '../environment'
 import type {
   ConfigEnv,
@@ -335,6 +335,16 @@ class RolldownEnvironment extends DevEnvironment {
           manifest: result.manifest,
           fileName: result.chunk?.fileName,
         })
+        // full reload on html
+        // TODO: what's the general way to handle this?
+        // should plugin (vite:build-html) be responsible of handling this?
+        if (ctx.file.endsWith('.html')) {
+          ctx.server.ws.send({
+            type: 'full-reload',
+            path:
+              '/' + normalizePath(path.relative(this.config.root, ctx.file)),
+          })
+        }
       } else {
         // TODO: manifest
         if (result.chunk) {
