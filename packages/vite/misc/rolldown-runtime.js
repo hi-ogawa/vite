@@ -82,10 +82,30 @@ var __toBinary = /* @__PURE__ */ (() => {
   }
 })()
 
+/**
+ * @typedef {(runtime: unknown) => void} ModuleFactory
+ * @typedef {Record<string, ModuleFactory>} ModuleFactoryMap
+ * @typedef {{ exports: unknown, parents: string[], hot: any }} ModuleCacheEntry
+ * @typedef {Record<string, ModuleCacheEntry>} ModuleCache
+ */
+
 self.__rolldown_runtime = {
+  /**
+   * @type {string[]}
+   */
   executeModuleStack: [],
+  /**
+   * @type {ModuleCache}
+   */
   moduleCache: {},
+  /**
+   * @type {ModuleFactoryMap}
+   */
   moduleFactoryMap: {},
+  /**
+   * @param {string} id
+   * @returns {unknown}
+   */
   require: function (id) {
     const parent = this.executeModuleStack.at(-1)
     if (this.moduleCache[id]) {
@@ -134,6 +154,9 @@ self.__rolldown_runtime = {
     this.executeModuleStack.pop()
     return module.exports
   },
+  /**
+   * @param {ModuleFactoryMap} newModuleFactoryMap
+   */
   patch: function (newModuleFactoryMap) {
     var boundaries = []
     var invalidModuleIds = []
