@@ -82,10 +82,30 @@ var __toBinary = /* @__PURE__ */ (() => {
   }
 })()
 
+/**
+ * @typedef {(runtime: unknown) => void} ModuleFactory
+ * @typedef {Record<string, ModuleFactory>} ModuleFactoryMap
+ * @typedef {{ exports: unknown, parents: string[], hot: any }} ModuleCacheEntry
+ * @typedef {Record<string, ModuleCacheEntry>} ModuleCache
+ */
+
 self.__rolldown_runtime = {
+  /**
+   * @type {string[]}
+   */
   executeModuleStack: [],
+  /**
+   * @type {ModuleCache}
+   */
   moduleCache: {},
+  /**
+   * @type {ModuleFactoryMap}
+   */
   moduleFactoryMap: {},
+  /**
+   * @param {string} id
+   * @returns {unknown}
+   */
   require: function (id) {
     const parent = this.executeModuleStack.at(-1)
     if (this.moduleCache[id]) {
@@ -122,9 +142,10 @@ self.__rolldown_runtime = {
     })
     this.executeModuleStack.push(id)
     factory({
-      require: this.require.bind(this),
       module,
       exports: module.exports,
+      require: this.require.bind(this),
+      ensureChunk: this.ensureChunk.bind(this),
       __toCommonJS,
       __toESM,
       __export,
@@ -133,6 +154,9 @@ self.__rolldown_runtime = {
     this.executeModuleStack.pop()
     return module.exports
   },
+  /**
+   * @param {ModuleFactoryMap} newModuleFactoryMap
+   */
   patch: function (newModuleFactoryMap) {
     var boundaries = []
     var invalidModuleIds = []
@@ -226,6 +250,24 @@ self.__rolldown_runtime = {
 
         visited[moduleId] = true
       }
+    }
+  },
+  /** @type {{ chunks: Record<string, { fileName: string, imports: string[] }> }} */
+  manifest: {},
+  /**
+   * @param {string} chunkName
+   */
+  async ensureChunk(chunkName) {
+    await this.ensureChunkDeps(chunkName)
+    const file = this.manifest.chunks[chunkName].fileName
+    await import(`/${file}`)
+  },
+  /**
+   * @param {string} chunkName
+   */
+  async ensureChunkDeps(chunkName) {
+    for (const file of this.manifest.chunks[chunkName].imports) {
+      await import(`/${file}`)
     }
   },
 }
