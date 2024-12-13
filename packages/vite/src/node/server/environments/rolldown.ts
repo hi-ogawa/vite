@@ -295,7 +295,7 @@ class RolldownEnvironment extends DevEnvironment {
   }
 
   async buildHmr(file: string): Promise<{
-    manifest: ChunkManifest
+    manifest: BuildManifest
     chunk?: rolldown.RolldownOutputChunk
   }> {
     logger.info(`hmr '${file}'`, { timestamp: true })
@@ -468,21 +468,22 @@ self.__rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
 self.__rolldown_runtime.patch(__rolldown_modules);
 `
           } else {
-            // TODO: avoid top-level-await?
             chunk.code += `
 Object.assign(self.__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
-await self.__rolldown_runtime.ensureChunkDeps(${JSON.stringify(chunk.name)});
 `
-          }
-          if (chunk.isEntry) {
-            assert(chunk.facadeModuleId)
-            const stableId = path.relative(
-              environment.config.root,
-              chunk.facadeModuleId,
-            )
-            chunk.code += `
-self.__rolldown_runtime.require(${JSON.stringify(stableId)});
+            if (chunk.isEntry) {
+              assert(chunk.facadeModuleId)
+              const stableId = path.relative(
+                environment.config.root,
+                chunk.facadeModuleId,
+              )
+              chunk.code += `
+self.__rolldown_runtime.loadChunkPromises[${JSON.stringify(chunk.name)}] = Promise.resolve();
+self.__rolldown_runtime.ensureChunk(${JSON.stringify(chunk.name)}).then(function(){
+  self.__rolldown_runtime.require(${JSON.stringify(stableId)});
+});
 `
+            }
           }
           chunk.code = moveInlineSourcemapToEnd(chunk.code)
         }
@@ -491,20 +492,47 @@ self.__rolldown_runtime.require(${JSON.stringify(stableId)});
   }
 }
 
-export type ChunkManifest = {
-  chunks: Record<string, { fileName: string; imports: string[] }>
+export type BuildManifest = {
+  chunks: Record<string, { file: string; dependencies: string[] }>
 }
 
 function getChunkManifest(
   outputs: (rolldown.RolldownOutputChunk | rolldown.RolldownOutputAsset)[],
-): ChunkManifest {
-  const manifest: ChunkManifest = {
+): BuildManifest {
+  const chunks = outputs.filter((o) => o.type === 'chunk')
+  const fileToChunkName: Record<string, string> = {}
+  for (const chunk of chunks) {
+    fileToChunkName[chunk.fileName] = chunk.name
+  }
+
+  const directDepMap: Record<string, string[]> = {}
+  for (const chunk of chunks) {
+    directDepMap[chunk.name] = chunk.imports.map(
+      (file) => fileToChunkName[file],
+    )
+  }
+
+  function traverse(name: string, adj: Record<string, string[]>): string[] {
+    const visited = new Set<string>()
+    function recurse(name: string) {
+      if (!visited.has(name)) {
+        visited.add(name)
+        for (const dep of adj[name]) {
+          recurse(dep)
+        }
+      }
+    }
+    recurse(name)
+    return [...visited]
+  }
+
+  const manifest: BuildManifest = {
     chunks: {},
   }
-  for (const chunk of outputs) {
-    if (chunk.type === 'chunk') {
-      const { fileName, imports } = chunk
-      manifest.chunks[chunk.name] = { fileName, imports }
+  for (const chunk of chunks) {
+    manifest.chunks[chunk.name] = {
+      file: chunk.fileName,
+      dependencies: traverse(chunk.name, directDepMap),
     }
   }
   return manifest

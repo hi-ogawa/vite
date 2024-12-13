@@ -252,22 +252,30 @@ self.__rolldown_runtime = {
       }
     }
   },
-  /** @type {{ chunks: Record<string, { fileName: string, imports: string[] }> }} */
+
+  /** @type {{ chunks: Record<string, { file: string, dependencies: string[] }> }} */
   manifest: {},
-  /**
-   * @param {string} chunkName
-   */
-  async ensureChunk(chunkName) {
-    await this.ensureChunkDeps(chunkName)
-    const file = this.manifest.chunks[chunkName].fileName
-    await import(`/${file}`)
+
+  /** @type {(name: string) => Promise<void>} */
+  async ensureChunk(name) {
+    const entry = this.manifest.chunks[name]
+    await Promise.all(
+      [name, ...entry.dependencies].map((name) => this.loadChunkCached(name)),
+    )
   },
-  /**
-   * @param {string} chunkName
-   */
-  async ensureChunkDeps(chunkName) {
-    for (const file of this.manifest.chunks[chunkName].imports) {
-      await import(`/${file}`)
-    }
+
+  /** @type {Record<string, Promise<void>>} */
+  loadChunkPromises: {},
+
+  /** @type {(name: string) => Promise<void>} */
+  async loadChunkCached(name) {
+    return (this.loadChunkPromises[name] ??= this.loadChunk(name))
+  },
+
+  /** @type {(name: string) => Promise<void>} */
+  async loadChunk(name) {
+    // TODO: use classic script
+    const file = this.manifest.chunks[name].file
+    await import(`/` + file)
   },
 }
