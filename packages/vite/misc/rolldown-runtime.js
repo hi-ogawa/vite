@@ -89,7 +89,7 @@ var __toBinary = /* @__PURE__ */ (() => {
  * @typedef {Record<string, ModuleCacheEntry>} ModuleCache
  */
 
-self.__rolldown_runtime = {
+var __rolldown_runtime = {
   /**
    * @type {string[]}
    */

@@ -367,6 +367,7 @@ class RolldownEnvironment extends DevEnvironment {
   runner!: RolldownModuleRunner
 
   async getRunner() {
+    // TODO: handle concurrent init
     if (!this.runner) {
       const output = this.result.output[0]
       const filepath = path.join(this.outDir, output.fileName)
@@ -391,35 +392,32 @@ class RolldownEnvironment extends DevEnvironment {
 }
 
 class RolldownModuleRunner {
-  // intercept globals
+  // TODO: refactor something
   private context = {
-    // TODO: avoid "self" on module runner
-    self: {
+    __rolldown_module_runner_context: {
       __rolldown_runtime: {} as any,
     },
     __require_external: require,
   }
 
-  // TODO: support resolution?
+  get runtime() {
+    return this.context.__rolldown_module_runner_context.__rolldown_runtime
+  }
+
   async import(id: string): Promise<unknown> {
-    const mod = this.context.self.__rolldown_runtime.moduleCache[id]
-    assert(mod, `Module not found '${id}'`)
-    return mod.exports
+    // TODO: this supports only "stable id".
+    // expose `resolveId` so we can support wider id here.
+    return this.runtime.require(id)
   }
 
   async evaluate(code: string, sourceURL: string) {
-    // extract sourcemap and move to the bottom
-    const sourcemap = code.match(/^\/\/# sourceMappingURL=.*/m)?.[0] ?? ''
-    if (sourcemap) {
-      code = code.replace(sourcemap, '')
-    }
     code = `\
-'use strict';async (${Object.keys(this.context).join(',')})=>{{${code}
+'use strict';async(${Object.keys(this.context).join(',')})=>{{${code}
 }}
 //# sourceURL=${sourceURL}
 //# sourceMappingSource=rolldown-module-runner
-${sourcemap}
 `
+    code = moveInlineSourcemapToEnd(code)
     const fn = (0, eval)(code)
     try {
       await fn(...Object.values(this.context))
@@ -435,6 +433,7 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
     name: 'vite:rolldown-patch-runtime',
     renderChunk(code) {
       // TODO: source map is broken otherwise
+      // fixed https://github.com/rolldown/rolldown/issues/3090
       const output = new MagicString(code)
       return {
         code: output.toString(),
@@ -447,6 +446,7 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
       for (const chunk of Object.values(bundle)) {
         if (chunk.type === 'chunk') {
           if (chunk.isEntry) {
+            // inject runtime
             chunk.code +=
               '\n;' +
               fs.readFileSync(
@@ -459,30 +459,52 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
             if (environment.rolldownDevOptions.reactRefresh) {
               chunk.code += getReactRefreshRuntimeCode()
             }
+            // inject manifest
             chunk.code += `
-self.__rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
+__rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
 `
           }
           if (chunk.name === 'hmr-update') {
+            // patch on hmr
+            if (environment.name === 'ssr') {
+              chunk.code += `
+var __rolldown_runtime = __rolldown_module_runner_context.__rolldown_runtime;
+`
+            }
             chunk.code += `
-self.__rolldown_runtime.patch(__rolldown_modules);
+__rolldown_runtime.patch(__rolldown_modules);
 `
           } else {
+            // set module factory
             chunk.code += `
-Object.assign(self.__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
+Object.assign(__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
 `
             if (chunk.isEntry) {
-              assert(chunk.facadeModuleId)
-              const stableId = path.relative(
-                environment.config.root,
-                chunk.facadeModuleId,
-              )
+              // ensure entry chunk
               chunk.code += `
-self.__rolldown_runtime.loadChunkPromises[${JSON.stringify(chunk.name)}] = Promise.resolve();
-self.__rolldown_runtime.ensureChunk(${JSON.stringify(chunk.name)}).then(function(){
-  self.__rolldown_runtime.require(${JSON.stringify(stableId)});
+__rolldown_runtime.loadChunkPromises[${JSON.stringify(chunk.name)}] = Promise.resolve();
+var __rolldown_entry_promise = __rolldown_runtime.ensureChunk(${JSON.stringify(chunk.name)});
+`
+              if (environment.name === 'client') {
+                // execute entry on client
+                assert(chunk.facadeModuleId)
+                const stableId = path.relative(
+                  environment.config.root,
+                  chunk.facadeModuleId,
+                )
+                chunk.code += `
+self.__rolldown_runtime = __rolldown_runtime;
+__rolldown_entry_promise.then(function() {
+  __rolldown_runtime.require(${JSON.stringify(stableId)})
 });
 `
+              }
+              if (environment.name === 'ssr') {
+                chunk.code += `
+__rolldown_module_runner_context.__rolldown_runtime = __rolldown_runtime;
+await __rolldown_entry_promise;
+`
+              }
             }
           }
           chunk.code = moveInlineSourcemapToEnd(chunk.code)
@@ -601,7 +623,7 @@ function getRolldownClientCode() {
   code += `
 const hot = createHotContext("/__rolldown");
 hot.on("rolldown:hmr", (data) => {
-  self.__rolldown_runtime.manifest = data.manifest;
+  __rolldown_runtime.manifest = data.manifest;
   if (data.fileName) {
     import("/" + data.fileName + "?t=" + Date.now());
   }
