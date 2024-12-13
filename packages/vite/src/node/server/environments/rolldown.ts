@@ -488,13 +488,13 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
 __rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
 `
           }
-          if (chunk.name === 'hmr-update') {
-            // patch on hmr
-            if (environment.name === 'ssr') {
-              chunk.code += `
+          if (environment.name === 'ssr' && !chunk.isEntry) {
+            chunk.code += `
 var __rolldown_runtime = __rolldown_module_runner_context.__rolldown_runtime;
 `
-            }
+          }
+          if (chunk.name === 'hmr-update') {
+            // patch on hmr
             chunk.code += `
 __rolldown_runtime.patch(__rolldown_modules);
 `
