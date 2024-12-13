@@ -346,15 +346,9 @@ class RolldownEnvironment extends DevEnvironment {
           })
         }
       } else {
-        // TODO: manifest
-        if (result.chunk) {
-          await (
-            await this.getRunner()
-          ).evaluate(
-            result.chunk.code,
-            path.join(this.outDir, result.chunk.fileName),
-          )
-        }
+        await (
+          await this.getRunner()
+        ).handleUpdate(result.manifest, result.chunk)
       }
     } else {
       await this.build()
@@ -369,11 +363,8 @@ class RolldownEnvironment extends DevEnvironment {
   async getRunner() {
     // TODO: handle concurrent init
     if (!this.runner) {
-      const output = this.result.output[0]
-      const filepath = path.join(this.outDir, output.fileName)
-      this.runner = new RolldownModuleRunner()
-      const code = fs.readFileSync(filepath, 'utf-8')
-      await this.runner.evaluate(code, filepath)
+      this.runner = new RolldownModuleRunner(this)
+      await this.runner.init()
     }
     return this.runner
   }
@@ -400,7 +391,27 @@ class RolldownModuleRunner {
     __require_external: require,
   }
 
-  get runtime() {
+  constructor(public environment: RolldownEnvironment) {
+    this.runtime.loadChunk = this.loadChunk.bind(this)
+  }
+
+  async init() {
+    const chunk = this.environment.result.output[0]
+    assert(chunk.type === 'chunk' && chunk.isEntry)
+    await this.evaluateChunk(chunk)
+  }
+
+  async handleUpdate(
+    manifest: BuildManifest,
+    chunk?: rolldown.RolldownOutputChunk,
+  ) {
+    this.runtime.manifest = manifest
+    if (chunk) {
+      await this.evaluateChunk(chunk)
+    }
+  }
+
+  private get runtime() {
     return this.context.__rolldown_module_runner_context.__rolldown_runtime
   }
 
@@ -410,7 +421,20 @@ class RolldownModuleRunner {
     return this.runtime.require(id)
   }
 
-  async evaluate(code: string, sourceURL: string) {
+  async loadChunk(name: string) {
+    const chunk = this.environment.result.output
+      .filter((chunk) => chunk.type === 'chunk')
+      .find((chunk) => chunk.name === name)
+    assert(chunk)
+    this.evaluateChunk(chunk)
+  }
+
+  async evaluateChunk(chunk: rolldown.RolldownOutputChunk) {
+    const filepath = path.join(this.environment.outDir, chunk.fileName)
+    await this.evaluate(chunk.code, filepath)
+  }
+
+  private async evaluate(code: string, sourceURL: string) {
     code = `\
 'use strict';async(${Object.keys(this.context).join(',')})=>{{${code}
 }}
@@ -501,7 +525,10 @@ __rolldown_entry_promise.then(function() {
               }
               if (environment.name === 'ssr') {
                 chunk.code += `
-__rolldown_module_runner_context.__rolldown_runtime = __rolldown_runtime;
+__rolldown_module_runner_context.__rolldown_runtime = Object.assign(
+  __rolldown_runtime,
+  __rolldown_module_runner_context.__rolldown_runtime,
+);
 await __rolldown_entry_promise;
 `
               }
