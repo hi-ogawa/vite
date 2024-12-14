@@ -59,6 +59,9 @@ export function rolldownDevHandleConfig(
     experimental: {
       enableNativePlugin: true,
     },
+    define: {
+      'import.meta.hot': 'module.hot',
+    },
     environments: {
       client: {
         dev: {
@@ -233,21 +236,6 @@ class RolldownEnvironment extends DevEnvironment {
         patchRuntimePlugin(this),
         patchCssPlugin(),
         reactRefreshPlugin(),
-        {
-          // TODO: import.meta not supported by app format
-          name: 'patch-import-meta',
-          transform: {
-            filter: {
-              code: [/import\.meta\.hot/],
-            },
-            handler(code) {
-              const output = new MagicString(code)
-              output.replaceAll('import.meta.hot.accept', 'module.hot.accept')
-              output.replaceAll('import.meta.hot.on', 'self.__rolldown_hot.on')
-              return { code: output.toString(), map: output.generateMap() }
-            },
-          },
-        },
       ],
       moduleTypes: {
         '.css': 'js',
@@ -612,8 +600,8 @@ function patchCssPlugin(): rolldown.Plugin {
         // TODO: import.meta.hot.prune
         const cssCode = code.match(/^const __vite__css = (.*)$/m)![1]
         const jsCode = `
-          __rolldown_updateStyle(${JSON.stringify(id)}, ${cssCode});
-          module.hot.accept();
+          __rolldown_runtime.updateStyle(${JSON.stringify(id)}, ${cssCode});
+          import.meta.hot.accept();
         `
         return { code: jsCode, moduleSideEffects: true }
       },
@@ -655,8 +643,9 @@ hot.on("rolldown:hmr", (data) => {
     import("/" + data.fileName + "?t=" + Date.now());
   }
 });
-self.__rolldown_hot = hot;
-self.__rolldown_updateStyle = updateStyle;
+hot.on = hot.on.bind(hot)
+__rolldown_runtime.hot = hot;
+__rolldown_runtime.updateStyle = updateStyle;
 `
   return `\n;(() => {/*** @vite/client ***/\n${code}}\n)();\n`
 }
