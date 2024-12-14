@@ -33,7 +33,8 @@ import type { Environment } from '../environment'
 import { getChunkMetadata } from './metadata'
 
 // referenceId is base64url but replaces - with $
-export const assetUrlRE = /__VITE_ASSET__([\w$]+)__(?:\$_(.*?)__)?/g
+export const assetUrlRE =
+  /__VITE_ASSET__HASH\$\w*__([\w$]+)__(?:\$_(.*?)__)?/g
 
 const jsSourceMapRE = /\.[cm]?js\.map$/
 
@@ -426,7 +427,11 @@ async function fileToBuiltUrl(
       .get(environment)!
       .set(referenceId, { originalFileName, content })
 
-    url = `__VITE_ASSET__${referenceId}__${postfix ? `$_${postfix}__` : ``}`
+    // NOTE: inject hash to invalidate module source on asset change
+    const crypto = await import('node:crypto')
+    const hash = crypto.hash('sha256', content).slice(0, 8)
+
+    url = `__VITE_ASSET__HASH$${hash}__${referenceId}__${postfix ? `$_${postfix}__` : ``}`
   }
 
   cache.set(id, url)
