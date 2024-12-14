@@ -295,7 +295,7 @@ class RolldownEnvironment extends DevEnvironment {
   }
 
   async buildHmr(file: string): Promise<{
-    manifest: ChunkManifest
+    manifest: BuildManifest
     chunk?: rolldown.RolldownOutputChunk
   }> {
     logger.info(`hmr '${file}'`, { timestamp: true })
@@ -346,15 +346,9 @@ class RolldownEnvironment extends DevEnvironment {
           })
         }
       } else {
-        // TODO: manifest
-        if (result.chunk) {
-          await (
-            await this.getRunner()
-          ).evaluate(
-            result.chunk.code,
-            path.join(this.outDir, result.chunk.fileName),
-          )
-        }
+        await (
+          await this.getRunner()
+        ).handleUpdate(result.manifest, result.chunk)
       }
     } else {
       await this.build()
@@ -367,12 +361,10 @@ class RolldownEnvironment extends DevEnvironment {
   runner!: RolldownModuleRunner
 
   async getRunner() {
+    // TODO: handle concurrent init
     if (!this.runner) {
-      const output = this.result.output[0]
-      const filepath = path.join(this.outDir, output.fileName)
-      this.runner = new RolldownModuleRunner()
-      const code = fs.readFileSync(filepath, 'utf-8')
-      await this.runner.evaluate(code, filepath)
+      this.runner = new RolldownModuleRunner(this)
+      await this.runner.init()
     }
     return this.runner
   }
@@ -391,35 +383,65 @@ class RolldownEnvironment extends DevEnvironment {
 }
 
 class RolldownModuleRunner {
-  // intercept globals
+  // TODO: refactor something
   private context = {
-    // TODO: avoid "self" on module runner
-    self: {
+    __rolldown_module_runner_context: {
       __rolldown_runtime: {} as any,
     },
     __require_external: require,
   }
 
-  // TODO: support resolution?
-  async import(id: string): Promise<unknown> {
-    const mod = this.context.self.__rolldown_runtime.moduleCache[id]
-    assert(mod, `Module not found '${id}'`)
-    return mod.exports
+  constructor(public environment: RolldownEnvironment) {
+    this.runtime.loadChunk = this.loadChunk.bind(this)
   }
 
-  async evaluate(code: string, sourceURL: string) {
-    // extract sourcemap and move to the bottom
-    const sourcemap = code.match(/^\/\/# sourceMappingURL=.*/m)?.[0] ?? ''
-    if (sourcemap) {
-      code = code.replace(sourcemap, '')
+  async init() {
+    const chunk = this.environment.result.output[0]
+    assert(chunk.type === 'chunk' && chunk.isEntry)
+    await this.evaluateChunk(chunk)
+  }
+
+  async handleUpdate(
+    manifest: BuildManifest,
+    chunk?: rolldown.RolldownOutputChunk,
+  ) {
+    this.runtime.manifest = manifest
+    if (chunk) {
+      await this.evaluateChunk(chunk)
     }
+  }
+
+  private get runtime() {
+    return this.context.__rolldown_module_runner_context.__rolldown_runtime
+  }
+
+  async import(id: string): Promise<unknown> {
+    // TODO: this supports only "stable id".
+    // expose `resolveId` so we can support wider id here.
+    return this.runtime.require(id)
+  }
+
+  async loadChunk(name: string) {
+    const chunk = this.environment.result.output
+      .filter((chunk) => chunk.type === 'chunk')
+      .find((chunk) => chunk.name === name)
+    assert(chunk)
+    this.evaluateChunk(chunk)
+  }
+
+  async evaluateChunk(chunk: rolldown.RolldownOutputChunk) {
+    const filepath = path.join(this.environment.outDir, chunk.fileName)
+    await this.evaluate(chunk.code, filepath)
+  }
+
+  private async evaluate(code: string, sourceURL: string) {
     code = `\
-'use strict';async (${Object.keys(this.context).join(',')})=>{{${code}
+'use strict';async(${Object.keys(this.context).join(',')})=>{{${code}
 }}
 //# sourceURL=${sourceURL}
 //# sourceMappingSource=rolldown-module-runner
-${sourcemap}
 `
+    code = moveInlineSourcemapToEnd(code)
     const fn = (0, eval)(code)
     try {
       await fn(...Object.values(this.context))
@@ -435,6 +457,7 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
     name: 'vite:rolldown-patch-runtime',
     renderChunk(code) {
       // TODO: source map is broken otherwise
+      // fixed https://github.com/rolldown/rolldown/issues/3090
       const output = new MagicString(code)
       return {
         code: output.toString(),
@@ -447,6 +470,7 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
       for (const chunk of Object.values(bundle)) {
         if (chunk.type === 'chunk') {
           if (chunk.isEntry) {
+            // inject runtime
             chunk.code +=
               '\n;' +
               fs.readFileSync(
@@ -459,30 +483,56 @@ function patchRuntimePlugin(environment: RolldownEnvironment): rolldown.Plugin {
             if (environment.rolldownDevOptions.reactRefresh) {
               chunk.code += getReactRefreshRuntimeCode()
             }
+            // inject manifest
             chunk.code += `
-self.__rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
+__rolldown_runtime.manifest = ${JSON.stringify(manifest, null, 2)};
+`
+          }
+          if (environment.name === 'ssr' && !chunk.isEntry) {
+            chunk.code += `
+var __rolldown_runtime = __rolldown_module_runner_context.__rolldown_runtime;
 `
           }
           if (chunk.name === 'hmr-update') {
+            // patch on hmr
             chunk.code += `
-self.__rolldown_runtime.patch(__rolldown_modules);
+__rolldown_runtime.patch(__rolldown_modules);
 `
           } else {
-            // TODO: avoid top-level-await?
+            // set module factory
             chunk.code += `
-Object.assign(self.__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
-await self.__rolldown_runtime.ensureChunkDeps(${JSON.stringify(chunk.name)});
+Object.assign(__rolldown_runtime.moduleFactoryMap, __rolldown_modules);
 `
-          }
-          if (chunk.isEntry) {
-            assert(chunk.facadeModuleId)
-            const stableId = path.relative(
-              environment.config.root,
-              chunk.facadeModuleId,
-            )
-            chunk.code += `
-self.__rolldown_runtime.require(${JSON.stringify(stableId)});
+            if (chunk.isEntry) {
+              // ensure entry chunk
+              chunk.code += `
+__rolldown_runtime.loadChunkPromises[${JSON.stringify(chunk.name)}] = Promise.resolve();
+var __rolldown_entry_promise = __rolldown_runtime.ensureChunk(${JSON.stringify(chunk.name)});
 `
+              if (environment.name === 'client') {
+                // execute entry on client
+                assert(chunk.facadeModuleId)
+                const stableId = path.relative(
+                  environment.config.root,
+                  chunk.facadeModuleId,
+                )
+                chunk.code += `
+self.__rolldown_runtime = __rolldown_runtime;
+__rolldown_entry_promise.then(function() {
+  __rolldown_runtime.require(${JSON.stringify(stableId)})
+});
+`
+              }
+              if (environment.name === 'ssr') {
+                chunk.code += `
+__rolldown_module_runner_context.__rolldown_runtime = Object.assign(
+  __rolldown_runtime,
+  __rolldown_module_runner_context.__rolldown_runtime,
+);
+await __rolldown_entry_promise;
+`
+              }
+            }
           }
           chunk.code = moveInlineSourcemapToEnd(chunk.code)
         }
@@ -491,20 +541,47 @@ self.__rolldown_runtime.require(${JSON.stringify(stableId)});
   }
 }
 
-export type ChunkManifest = {
-  chunks: Record<string, { fileName: string; imports: string[] }>
+export type BuildManifest = {
+  chunks: Record<string, { file: string; dependencies: string[] }>
 }
 
 function getChunkManifest(
   outputs: (rolldown.RolldownOutputChunk | rolldown.RolldownOutputAsset)[],
-): ChunkManifest {
-  const manifest: ChunkManifest = {
+): BuildManifest {
+  const chunks = outputs.filter((o) => o.type === 'chunk')
+  const fileToChunkName: Record<string, string> = {}
+  for (const chunk of chunks) {
+    fileToChunkName[chunk.fileName] = chunk.name
+  }
+
+  const directDepMap: Record<string, string[]> = {}
+  for (const chunk of chunks) {
+    directDepMap[chunk.name] = chunk.imports.map(
+      (file) => fileToChunkName[file],
+    )
+  }
+
+  function traverse(name: string, adj: Record<string, string[]>): string[] {
+    const visited = new Set<string>()
+    function recurse(name: string) {
+      if (!visited.has(name)) {
+        visited.add(name)
+        for (const dep of adj[name]) {
+          recurse(dep)
+        }
+      }
+    }
+    recurse(name)
+    return [...visited]
+  }
+
+  const manifest: BuildManifest = {
     chunks: {},
   }
-  for (const chunk of outputs) {
-    if (chunk.type === 'chunk') {
-      const { fileName, imports } = chunk
-      manifest.chunks[chunk.name] = { fileName, imports }
+  for (const chunk of chunks) {
+    manifest.chunks[chunk.name] = {
+      file: chunk.fileName,
+      dependencies: traverse(chunk.name, directDepMap),
     }
   }
   return manifest
@@ -573,7 +650,7 @@ function getRolldownClientCode() {
   code += `
 const hot = createHotContext("/__rolldown");
 hot.on("rolldown:hmr", (data) => {
-  self.__rolldown_runtime.manifest = data.manifest;
+  __rolldown_runtime.manifest = data.manifest;
   if (data.fileName) {
     import("/" + data.fileName + "?t=" + Date.now());
   }

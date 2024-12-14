@@ -30,3 +30,8 @@ test.runIf(!isBuild)('hmr', async () => {
   const res = await page.request.get(viteTestUrl)
   expect(await res.text()).toContain('Count-x-y')
 })
+
+test('dynamic-import', async () => {
+  const res = await page.goto(viteTestUrl + '/dynamic-import')
+  expect(await res?.text()).toContain('[dynamic-import-ok]')
+})
