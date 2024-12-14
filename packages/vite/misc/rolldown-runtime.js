@@ -127,6 +127,7 @@ var __rolldown_runtime = {
       exports: {},
       parents: parent ? [parent] : [],
       hot: {
+        ...__rolldown_runtime.hot,
         selfAccept: false,
         acceptCallbacks: [],
         accept: function (callback) {
@@ -146,6 +147,7 @@ var __rolldown_runtime = {
       exports: module.exports,
       require: this.require.bind(this),
       ensureChunk: this.ensureChunk.bind(this),
+      updateStyle: this.updateStyle.bind(this),
       __toCommonJS,
       __toESM,
       __export,
@@ -278,4 +280,8 @@ var __rolldown_runtime = {
     const file = this.manifest.chunks[name].file
     await import(`/` + file)
   },
+
+  // injected via getRolldownClientCode
+  hot: {},
+  updateStyle() {},
 }
