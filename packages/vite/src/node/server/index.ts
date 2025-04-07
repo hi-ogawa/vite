@@ -26,6 +26,7 @@ import type { InlineConfig, ResolvedConfig } from '../config'
 import { resolveConfig } from '../config'
 import {
   diffDnsOrderChange,
+  getTimestamp,
   isInNodeModules,
   isObject,
   isParentDirectory,
@@ -639,7 +640,7 @@ export async function _createServer(
           environments[environmentModule.environment]!,
           module.file,
           [environmentModule],
-          Date.now(),
+          getTimestamp(),
         )
       }
     },

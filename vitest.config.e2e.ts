@@ -13,9 +13,9 @@ export default defineConfig({
     include: ['./playground/**/*.spec.[tj]s'],
     setupFiles: ['./playground/vitestSetup.ts'],
     globalSetup: ['./playground/vitestGlobalSetup.ts'],
-    testTimeout: timeout,
-    hookTimeout: timeout,
-    reporters: 'dot',
+    // testTimeout: timeout,
+    // hookTimeout: timeout,
+    // reporters: 'dot',
     deps: {
       // Prevent Vitest from running the workspace packages in Vite's SSR runtime
       moduleDirectories: ['node_modules', 'packages'],

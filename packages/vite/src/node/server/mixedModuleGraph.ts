@@ -5,6 +5,7 @@ import type {
   EnvironmentModuleNode,
   ResolvedUrl,
 } from './moduleGraph'
+import { getTimestamp } from '../utils'
 
 /**
  * Backward compatible ModuleNode and ModuleGraph with mixed nodes from both the client and ssr environments
@@ -387,7 +388,7 @@ export class ModuleGraph {
   invalidateModule(
     mod: ModuleNode,
     seen = new Set<ModuleNode>(),
-    timestamp: number = Date.now(),
+    timestamp: number = getTimestamp(),
     isHmr: boolean = false,
     /** @internal */
     softInvalidate = false,

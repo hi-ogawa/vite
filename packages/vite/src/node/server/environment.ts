@@ -10,7 +10,7 @@ import type {
   ResolvedConfig,
   ResolvedEnvironmentOptions,
 } from '../config'
-import { mergeConfig } from '../utils'
+import { getTimestamp, mergeConfig } from '../utils'
 import { fetchModule } from '../ssr/fetchModule'
 import type { DepsOptimizer } from '../optimizer'
 import { isDepOptimizationDisabled } from '../optimizer'
@@ -201,7 +201,7 @@ export class DevEnvironment extends BaseEnvironment {
 
   async reloadModule(module: EnvironmentModuleNode): Promise<void> {
     if (this.config.server.hmr !== false && module.file) {
-      updateModules(this, module.file, [module], Date.now())
+      updateModules(this, module.file, [module], getTimestamp())
     }
   }
 

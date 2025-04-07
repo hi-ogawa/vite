@@ -365,7 +365,8 @@ export function injectQuery(url: string, queryToInject: string): string {
   return `${normalizedFile}?${queryToInject}${postfix[0] === '?' ? `&${postfix.slice(1)}` : /* hash only */ postfix}`
 }
 
-const timestampRE = /\bt=\d{13}&?\b/
+// const timestampRE = /\bt=\d{13}&?\b/
+const timestampRE = /\bt=\d+&?\b/
 export function removeTimestampQuery(url: string): string {
   return url.replace(timestampRE, '').replace(trailingSeparatorRE, '')
 }
@@ -1655,4 +1656,16 @@ export const teardownSIGTERMListener = (
       process.stdin.off('end', parentSigtermCallback)
     }
   }
+}
+
+// make Date.now() strictly increasing when called multiple times at the same millisecond
+let lastTimestamp = 0
+export function getTimestamp(): number {
+  const now = Date.now() * 1000
+  if (now <= lastTimestamp) {
+    lastTimestamp++
+  } else {
+    lastTimestamp = now
+  }
+  return lastTimestamp
 }

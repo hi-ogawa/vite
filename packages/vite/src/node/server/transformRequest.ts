@@ -10,6 +10,7 @@ import type { EnvironmentModuleNode } from '../server/moduleGraph'
 import {
   createDebugger,
   ensureWatchedFile,
+  getTimestamp,
   injectQuery,
   isObject,
   prettifyUrl,
@@ -105,7 +106,7 @@ export function transformRequest(
   //
   // We save the timestamp when we start processing and compare it with the
   // last time this module is invalidated
-  const timestamp = Date.now()
+  const timestamp = getTimestamp();
 
   const pending = environment._pendingRequests.get(cacheKey)
   if (pending) {
