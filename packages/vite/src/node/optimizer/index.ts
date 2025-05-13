@@ -497,7 +497,10 @@ export function runOptimizeDeps(
 
   // a hint for Node.js
   // all files in the cache directory should be recognized as ES modules
-  debug?.(colors.green(`creating package.json in ${processingCacheDir}`))
+  debug?.(
+    `(${environment.name}) ` +
+      colors.green(`creating package.json in ${processingCacheDir}`),
+  )
   fs.writeFileSync(
     path.resolve(processingCacheDir, 'package.json'),
     `{\n  "type": "module"\n}\n`,
@@ -524,7 +527,10 @@ export function runOptimizeDeps(
       cleaned = true
       // No need to wait, we can clean up in the background because temp folders
       // are unique per run
-      debug?.(colors.green(`removing cache dir ${processingCacheDir}`))
+      debug?.(
+        `(${environment.name}) ` +
+          colors.green(`removing cache dir ${processingCacheDir}`),
+      )
       try {
         // When exiting the process, `fsp.rm` may not take effect, so we use `fs.rmSync`
         fs.rmSync(processingCacheDir, { recursive: true, force: true })
@@ -551,7 +557,10 @@ export function runOptimizeDeps(
       // Rewire the file paths from the temporary processing dir to the final deps cache dir
       const dataPath = path.join(processingCacheDir, METADATA_FILENAME)
       debug?.(
-        colors.green(`creating ${METADATA_FILENAME} in ${processingCacheDir}`),
+        `(${environment.name}) ` +
+          colors.green(
+            `creating ${METADATA_FILENAME} in ${processingCacheDir}`,
+          ),
       )
       fs.writeFileSync(
         dataPath,
@@ -570,27 +579,38 @@ export function runOptimizeDeps(
       const depsCacheDirPresent = fs.existsSync(depsCacheDir)
       if (isWindows) {
         if (depsCacheDirPresent) {
-          debug?.(colors.green(`renaming ${depsCacheDir} to ${temporaryPath}`))
+          debug?.(
+            `(${environment.name}) ` +
+              colors.green(`renaming ${depsCacheDir} to ${temporaryPath}`),
+          )
           await safeRename(depsCacheDir, temporaryPath)
         }
         debug?.(
-          colors.green(`renaming ${processingCacheDir} to ${depsCacheDir}`),
+          `(${environment.name}) ` +
+            colors.green(`renaming ${processingCacheDir} to ${depsCacheDir}`),
         )
         await safeRename(processingCacheDir, depsCacheDir)
       } else {
         if (depsCacheDirPresent) {
-          debug?.(colors.green(`renaming ${depsCacheDir} to ${temporaryPath}`))
+          debug?.(
+            `(${environment.name}) ` +
+              colors.green(`renaming ${depsCacheDir} to ${temporaryPath}`),
+          )
           fs.renameSync(depsCacheDir, temporaryPath)
         }
         debug?.(
-          colors.green(`renaming ${processingCacheDir} to ${depsCacheDir}`),
+          `(${environment.name}) ` +
+            colors.green(`renaming ${processingCacheDir} to ${depsCacheDir}`),
         )
         fs.renameSync(processingCacheDir, depsCacheDir)
       }
 
       // Delete temporary path in the background
       if (depsCacheDirPresent) {
-        debug?.(colors.green(`removing cache temp dir ${temporaryPath}`))
+        debug?.(
+          `(${environment.name}) ` +
+            colors.green(`removing cache temp dir ${temporaryPath}`),
+        )
         fsp.rm(temporaryPath, { recursive: true, force: true })
       }
     },
@@ -716,7 +736,8 @@ export function runOptimizeDeps(
         }
 
         debug?.(
-          `Dependencies bundled in ${(performance.now() - start).toFixed(2)}ms`,
+          `(${environment.name}) ` +
+            `Dependencies bundled in ${(performance.now() - start).toFixed(2)}ms`,
         )
 
         return successfulResult
@@ -1132,7 +1153,8 @@ export async function extractExportsData(
   } catch {
     const loader = esbuildOptions.loader?.[path.extname(filePath)] || 'jsx'
     debug?.(
-      `Unable to parse: ${filePath}.\n Trying again with a ${loader} transform.`,
+      `(${environment.name}) ` +
+        `Unable to parse: ${filePath}.\n Trying again with a ${loader} transform.`,
     )
     const transformed = await transformWithEsbuild(
       entryContent,
