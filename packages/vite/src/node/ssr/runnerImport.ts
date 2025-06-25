@@ -5,6 +5,7 @@ import { mergeConfig } from '../utils'
 
 interface RunnerImportResult<T> {
   module: T
+  moduleFile?: string
   dependencies: string[]
 }
 
@@ -66,8 +67,10 @@ export async function runnerImport<T>(
         return m.exports !== module
       })
       .map((m) => m.file)
+    const moduleFile = modules.find((module) => module.exports === module)?.file
     return {
       module,
+      moduleFile,
       dependencies,
     }
   } finally {
