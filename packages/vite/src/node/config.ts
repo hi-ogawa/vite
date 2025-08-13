@@ -1283,6 +1283,9 @@ export async function resolveConfig(
     logger,
     undefined,
   )
+  resolvedBuildOptions.outDir = normalizePath(
+    path.resolve(resolvedRoot, resolvedBuildOptions.outDir),
+  )
 
   // Backward compatibility: merge config.environments.ssr back into config.ssr
   // so ecosystem SSR plugins continue to work if only environments.ssr is configured
